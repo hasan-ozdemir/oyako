@@ -1,0 +1,38 @@
+# Secrets and local environment files
+*.env
+*.env.*
+!*.env.example
+oyako.env
+azure.env
+ollama.env
+azure-cloud.env
+ollama-cloud.env
+
+# Logs and diagnostics
+*.log
+*.trace
+.verification/
+runtime-backups/
+playwright-report/
+
+# Backend runtime data
+webapi-oyako/Data/
+webapi-oyako/Data/**
+webapi-oyako/.certificates/
+webapi-oyako/.certificates/**
+webapi-oyako/bin/
+webapi-oyako/obj/
+webapi-oyako/**/bin/
+webapi-oyako/**/obj/
+
+# Frontend dependencies and generated output
+webapp-oyako/node_modules/
+webapp-oyako/dist/
+webapp-oyako/test-results/
+webapp-oyako/playwright-report/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/.history
+.idea/
