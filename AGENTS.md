@@ -1,0 +1,68 @@
+# Oyako Agent Guide
+
+## Mission
+
+Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeScript + Vite SPA and an ASP.NET 10 Web API with portable SQLite. The assistant answers from enabled knowledge sources and documents, using one-shot AI calls through Azure, Ollama Cloud, or Ollama Local depending on configuration.
+
+## Repository Map
+
+- `webapi-oyako/`: ASP.NET backend, Domain/Application/Infrastructure/Presentation layers, SQLite bootstrap, crawler/scraper, AI providers, tests.
+- `webapp-oyako/`: React SPA/PWA, Turkish UI, accessibility-first dialogs, source/document management, Playwright tests.
+- `docs/`: architecture, CI/CD/CT, and UI production-readiness notes.
+- `Dockerfile`, `run-docker.cmd`, `deploy-aca.cmd`: container and Azure Container Apps automation.
+- `run-app.cmd`: local backend/frontend launcher.
+
+## Language Rules
+
+- Code identifiers, comments, API contracts, class names, method names, and filenames stay English.
+- User-facing UI strings, help text, runtime status labels, and assistant-facing Turkish product instructions stay Turkish.
+- Do not add legacy compatibility paths during pre-alpha cutovers. The newest requested behavior is the primary behavior.
+
+## Safety Rules
+
+- Never commit real secrets: `oyako.env`, `azure.env`, `azure-cloud.env`, `ollama.env`, `ollama-cloud.env`, certificates, SQLite files, logs, runtime data, or uploaded raw files.
+- Commit only safe `.env.example` files.
+- Keep `webapi-oyako/Data/`, `.certificates/`, `node_modules/`, `dist/`, `bin/`, `obj/`, and Playwright artifacts out of Git.
+- Before public push, scan staged content for API keys, private keys, connection strings, and generated data.
+
+## Backend Conventions
+
+- Preserve Clean Architecture boundaries: Domain has contracts and core vocabulary; Application coordinates workflows; Infrastructure owns SQLite/HTTP/browser/AI implementations; Presentation exposes minimal APIs.
+- SQLite must bootstrap itself code-first in an empty environment.
+- Knowledge source/document mutations must immediately update active knowledge cache when they affect enabled, non-archived content.
+- Enable/disable and archive/unarchive actions should be fast cache state switches, not heavy redownload operations.
+- Website crawling must use bounded timeouts, random request delay, and fail-forward behavior.
+- Web links and local files share the same parse/clean/normalize pipeline where possible.
+- AI calls for Q&A remain one-shot: system instruction plus one user message, no provider-side chat history.
+
+## Frontend Conventions
+
+- All popups are modal and accessible. They must trap focus, close predictably, and restore focus.
+- Dialog action order should place the primary action before cancel where requested.
+- Text inputs and textareas must not lose focus or close dialogs while typing.
+- Scrollbars should appear only when content exceeds the available area; no content should become unreachable.
+- Status bar must never be blank. Use `Sayfa Yükleniyor`, `Uygulama Hazır`, `Soru Soruluyor`, or the best contextual Turkish status.
+- Tables use external semantic headings, not table captions as visible section titles.
+
+## Test Commands
+
+- Backend: `dotnet test webapi-oyako/webapi-oyako.Tests/webapi-oyako.Tests.csproj`
+- Backend build: `dotnet build webapi-oyako/webapi-oyako.csproj`
+- Frontend install: `npm ci --prefix webapp-oyako`
+- Frontend build: `npm run build --prefix webapp-oyako`
+- Frontend lint: `npm run lint --prefix webapp-oyako`
+- Frontend UI tests: `npm run test:ui --prefix webapp-oyako`
+
+## Docker and Azure
+
+- Local Docker can include local-development behavior.
+- Azure Container Apps image must include Azure and Ollama Cloud providers; Ollama Local is disabled in Azure.
+- `deploy-aca.cmd` deploys one image: `oyako:latest`.
+- Azure ACR should retain only the latest `oyako:latest` image for this pre-alpha flow.
+- Azure deploy target uses subscription `az2vs`, resource group `rg-oyako`, and app prefix `aca-`.
+
+## Documentation Discipline
+
+- Update README and docs whenever public behavior, script usage, deploy flow, API behavior, or user workflow changes.
+- Keep help content Turkish and aligned with the latest UI.
+- Prefer concise, explicit comments that explain purpose and workflow decisions.
