@@ -1,0 +1,6 @@
+@webapi_oyako_HostAddress = http://localhost:5002
+
+GET {{webapi_oyako_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
