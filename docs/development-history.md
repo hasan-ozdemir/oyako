@@ -5,3 +5,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 001. Scaffolded the React TypeScript Vite web app and ASP.NET 10 Web API structure.
 - 002. Established SQLite as the portable backend persistence store.
 - 003. Introduced Clean Architecture layering across Domain, Application, Infrastructure, and Presentation.
+- 004. Added code-first database bootstrap behavior for empty development and runtime environments.
