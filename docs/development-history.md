@@ -30,3 +30,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 026. Added DocumentViewer for local document source links.
 - 027. Created Knowledge Bank modal for sources and documents.
 - 028. Added source tables with enable, archive, edit, delete, and redownload operations.
+- 029. Added document tables with enable, archive, edit, delete, and redownload operations.
