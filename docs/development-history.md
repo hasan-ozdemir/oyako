@@ -34,3 +34,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 030. Added local file source support and raw file storage under knowledge-bank GUID folders.
 - 031. Added web links source type for user-managed web document links.
 - 032. Shared local-file and web-link parsing pipelines for supported document types.
+- 033. Added file upload parsing for txt, docx, pdf, pptx, rtf, epub, html, htm, and markdown.
