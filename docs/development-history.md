@@ -25,3 +25,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 021. Added ChatGPT/Gemini-like visual conversation flow while preserving one-shot backend inference.
 - 022. Moved latest suggested questions to the most recent assistant answer only.
 - 023. Rendered assistant markdown as safe HTML on the backend.
+- 024. Added actionable link handling for email, phone, web, WhatsApp, and map-like address data.
