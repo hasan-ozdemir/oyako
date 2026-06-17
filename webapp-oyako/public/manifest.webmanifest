@@ -1,0 +1,20 @@
+{
+  "name": "Oyako",
+  "short_name": "Oyako",
+  "description": "Oyak Dijital web kaynaklariyla beslenen tek sayfalik soru-cevap platformu.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f8fb",
+  "theme_color": "#0f172a",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/oyako-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
