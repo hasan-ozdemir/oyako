@@ -49,3 +49,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 045. Fixed crawler duplicate handling for repeated refresh cycles.
 - 046. Added knowledge redownload and source refresh distinctions.
 - 047. Made background website source refresh asynchronous and non-blocking for active Q&A.
+- 048. Optimized enable and disable switches to update cache without heavy refresh operations.
