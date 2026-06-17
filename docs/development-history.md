@@ -48,3 +48,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 044. Expanded viewport checks across phone, tablet, laptop, desktop, and 1920x1080.
 - 045. Fixed crawler duplicate handling for repeated refresh cycles.
 - 046. Added knowledge redownload and source refresh distinctions.
+- 047. Made background website source refresh asynchronous and non-blocking for active Q&A.
