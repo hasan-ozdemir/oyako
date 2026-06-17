@@ -53,3 +53,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 049. Added source/document mutation reactions that instantly activate new knowledge.
 - 050. Hardened preview generation to remove repeated navigation boilerplate.
 - 051. Added first-heading title extraction for scraped web documents.
+- 052. Added generic tests for source attribution instead of prompt-specific checks.
