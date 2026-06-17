@@ -43,3 +43,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 039. Added status bar live messages for loading, ready, question, answer, offline, crawl, cache, and refresh phases.
 - 040. Ensured status bar never renders blank state.
 - 041. Removed noisy fallback and legacy UI copy during pre-alpha cutovers.
+- 042. Added Turkish help content aligned with latest UI behavior.
