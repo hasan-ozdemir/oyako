@@ -19,3 +19,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 015. Added provider routing and provider fallback for pre-token failures.
 - 016. Implemented ready-question generation from current knowledge content.
 - 017. Linked ready questions to enabled documents so disabled content is not suggested.
+- 018. Added settings UI for provider, model, question counts, auto-send, and source display preferences.
