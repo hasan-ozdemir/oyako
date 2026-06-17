@@ -17,3 +17,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 013. Added Azure AI provider configuration and streaming answer integration.
 - 014. Split Ollama behavior into local and cloud provider paths.
 - 015. Added provider routing and provider fallback for pre-token failures.
+- 016. Implemented ready-question generation from current knowledge content.
