@@ -23,3 +23,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 019. Made settings persistent through backend storage.
 - 020. Built the Turkish one-page Q&A interface with modern assistant-style layout.
 - 021. Added ChatGPT/Gemini-like visual conversation flow while preserving one-shot backend inference.
+- 022. Moved latest suggested questions to the most recent assistant answer only.
