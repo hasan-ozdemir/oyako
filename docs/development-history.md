@@ -50,3 +50,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 046. Added knowledge redownload and source refresh distinctions.
 - 047. Made background website source refresh asynchronous and non-blocking for active Q&A.
 - 048. Optimized enable and disable switches to update cache without heavy refresh operations.
+- 049. Added source/document mutation reactions that instantly activate new knowledge.
