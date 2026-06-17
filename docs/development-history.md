@@ -7,3 +7,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 003. Introduced Clean Architecture layering across Domain, Application, Infrastructure, and Presentation.
 - 004. Added code-first database bootstrap behavior for empty development and runtime environments.
 - 005. Implemented initial Oyak Dijital website crawling and text extraction.
+- 006. Added browser-rendered scraping with Playwright for user-visible page text.
