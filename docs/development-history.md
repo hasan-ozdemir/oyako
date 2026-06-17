@@ -56,3 +56,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 052. Added generic tests for source attribution instead of prompt-specific checks.
 - 053. Removed prompt-specific debug tests after hardening attribution.
 - 054. Added Dockerfile for one-container full-stack runtime.
+- 055. Added local Docker script and cleanup behavior.
