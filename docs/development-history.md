@@ -39,3 +39,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 035. Added warning log viewer behavior for failed sources and documents.
 - 036. Standardized modal windows, progress viewers, document viewers, and message boxes.
 - 037. Hardened focus management so typing does not close dialogs or drop focus.
+- 038. Improved keyboard and screen-reader behavior across ready questions and tables.
