@@ -57,3 +57,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 053. Removed prompt-specific debug tests after hardening attribution.
 - 054. Added Dockerfile for one-container full-stack runtime.
 - 055. Added local Docker script and cleanup behavior.
+- 056. Added Azure Container Apps deploy script using Azure CLI and Docker Desktop.
