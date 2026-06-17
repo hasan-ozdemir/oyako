@@ -1,0 +1,68 @@
+/* Codex developer note: Documents the visual system and responsive behavior in webapp-oyako/src/index.css. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+:root {
+  --bg-page: #f7f4ef;
+  --ink: #221817;
+  --muted: #716765;
+  --brand: #b71922;
+  --violet: #5f2f2f;
+  --ready: #1f7a55;
+  --accent: #c57a2a;
+  --danger: #b71922;
+  --line: rgba(71, 44, 39, 0.14);
+  --line-strong: rgba(71, 44, 39, 0.26);
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-strong: #fffdf9;
+  --focus: #d43a32;
+
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--bg-page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+html {
+  min-height: 100%;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100svh;
+}
+
+button,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+textarea,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+select {
+  outline-color: var(--focus);
+  outline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 72%, white);
+  outline-offset: 3px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+#root {
+  min-height: 100svh;
+}
