@@ -45,3 +45,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 041. Removed noisy fallback and legacy UI copy during pre-alpha cutovers.
 - 042. Added Turkish help content aligned with latest UI behavior.
 - 043. Added frontend Playwright and Axe accessibility coverage.
+- 044. Expanded viewport checks across phone, tablet, laptop, desktop, and 1920x1080.
