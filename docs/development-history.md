@@ -28,3 +28,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 024. Added actionable link handling for email, phone, web, WhatsApp, and map-like address data.
 - 025. Created source attribution rendering for web documents and local files.
 - 026. Added DocumentViewer for local document source links.
+- 027. Created Knowledge Bank modal for sources and documents.
