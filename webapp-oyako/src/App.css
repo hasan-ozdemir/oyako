@@ -1,0 +1,3027 @@
+/* Codex developer note: Documents the visual system and responsive behavior in webapp-oyako/src/App.css. */
+.page-shell {
+  min-height: 100svh;
+  height: 100dvh;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(224, 169, 40, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 247, 240, 0.94)),
+    var(--bg-page);
+}
+
+/* Prevents the document behind a modal from scrolling while a blocking surface is active. */
+body.oyako-modal-open {
+  overflow: hidden;
+}
+
+/* Lets the app content keep its grid layout while it can be made inert as one subtree. */
+.app-interaction-surface {
+  display: contents;
+}
+
+/* Blocks pointer interaction for browsers that do not fully honor inert on every input modality. */
+.app-interaction-surface[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+/* Provides the shared modal backdrop used by message boxes, confirmations, source forms, and progress viewers. */
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(14px, 2.5vw, 28px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(224, 169, 40, 0.18), transparent 34%),
+    rgba(18, 27, 25, 0.48);
+  backdrop-filter: blur(10px);
+}
+
+/* Defines the common surface contract for every standardized modal window. */
+.modal-surface {
+  min-width: 0;
+  max-width: 100%;
+  max-height: calc(100dvh - clamp(28px, 5vw, 56px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+
+/* Gives focused modal surfaces a visible keyboard outline without changing layout. */
+.modal-surface:focus-visible {
+  box-shadow: 0 0 0 3px rgba(31, 105, 118, 0.22), 0 32px 80px rgba(18, 27, 25, 0.28);
+}
+
+/* Standardizes modal source forms so add/edit flows look and behave consistently. */
+.source-form-dialog {
+  width: min(760px, 100%);
+  grid-template-rows: auto auto 1fr;
+}
+
+/* Creates a reusable form layout for modal add/edit dialogs. */
+.modal-form-grid {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  gap: 15px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Standardizes labels inside modal forms for both visual scanning and screen reader context. */
+.modal-form-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Standardizes modal form controls across source add and source edit dialogs. */
+.modal-form-grid input,
+.modal-form-grid select,
+.modal-form-grid textarea {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 12px;
+  font: inherit;
+}
+
+/* Keeps longer modal form descriptions editable without breaking the dialog layout. */
+.modal-form-grid textarea {
+  min-height: 110px;
+  max-height: 28svh;
+  overflow: auto;
+  padding: 12px;
+  resize: vertical;
+}
+
+/* Communicates destructive confirmation actions with a consistent visual treatment. */
+.danger-action-button {
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, white);
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--danger), #7f151a);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 10px 14px;
+  box-shadow: 0 14px 28px rgba(183, 25, 34, 0.18);
+}
+
+/* Adds a subtle hover state to destructive modal actions. */
+.danger-action-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Renders modal message boxes as compact, blocking alert dialogs. */
+.message-dialog {
+  width: min(520px, 100%);
+  border: 1px solid rgba(194, 122, 30, 0.24);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 231, 176, 0.58), transparent 34%),
+    rgba(255, 252, 244, 0.99);
+  color: #6d4213;
+  box-shadow: 0 32px 80px rgba(18, 27, 25, 0.28);
+  padding: 18px;
+}
+
+/* Aligns alert icon, content, and close action in message dialogs. */
+.message-dialog-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+/* Styles the modal message title. */
+.message-dialog h2 {
+  margin: 0 0 5px;
+  color: #50300f;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+/* Styles the modal message body copy. */
+.message-dialog p {
+  color: #6d4213;
+  line-height: 1.5;
+}
+
+/* Keeps the message dialog close button large enough for mouse and touch users. */
+.message-dialog-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(109, 66, 19, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #6d4213;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Renders destructive confirmations as clear blocking alert dialogs. */
+.confirm-dialog {
+  width: min(520px, 100%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, white);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 247, 244, 0.99));
+  box-shadow: 0 32px 80px rgba(18, 27, 25, 0.3);
+  padding: 20px;
+}
+
+/* Highlights the confirmation severity without relying on text alone. */
+.confirm-dialog-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--danger) 12%, white);
+  color: var(--danger);
+}
+
+/* Keeps confirmation copy readable in narrow modal widths. */
+.confirm-dialog-copy {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+/* Styles the confirmation heading. */
+.confirm-dialog h2 {
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+/* Styles the confirmation explanatory copy. */
+.confirm-dialog p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* Places confirmation actions in a consistent bottom-right button row. */
+.confirm-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Adapts the shared progress viewer for modal usage. */
+.progress-dialog {
+  width: min(720px, 100%);
+  box-shadow: 0 32px 80px rgba(18, 27, 25, 0.28);
+}
+
+/* Gives the modal progress title row stronger spacing. */
+.progress-dialog-top {
+  margin-bottom: 2px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.topbar {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  min-height: 108px;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(18px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand), var(--violet));
+  color: white;
+  box-shadow: 0 12px 26px rgba(31, 105, 118, 0.2);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.brand-block {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.new-chat-button,
+.oyak-brand-link,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.avatar-button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  box-shadow: 0 12px 28px rgba(22, 51, 77, 0.08);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease,
+    background 150ms ease;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-chat-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  border-radius: 13px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-chat-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-chat-icon span {
+  position: absolute;
+  right: -5px;
+  top: -6px;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #3a2600;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.new-chat-button:hover:not(:disabled),
+.oyak-brand-link:hover,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.avatar-button:hover {
+  border-color: rgba(24, 87, 123, 0.32);
+  box-shadow: 0 16px 34px rgba(22, 51, 77, 0.11);
+  transform: translateY(-1px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-chat-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.oyak-brand-link {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  max-width: min(34vw, 270px);
+  padding: 7px 13px 7px 8px;
+  border-radius: 16px;
+  text-decoration: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 252, 247, 0.9)),
+    radial-gradient(circle at 0% 0%, rgba(226, 58, 46, 0.1), transparent 42%);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.oyak-brand-logo {
+  width: clamp(30px, 3vw, 38px);
+  height: clamp(30px, 3vw, 38px);
+  flex: 0 0 auto;
+  filter: drop-shadow(0 8px 16px rgba(143, 23, 24, 0.14));
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.oyak-brand-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #9f1718;
+  font-size: clamp(13px, 1.7vw, 18px);
+  font-weight: 950;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.user-menu-shell {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.avatar-button {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.9), transparent 25%),
+    linear-gradient(135deg, var(--brand), #6e8f65);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.avatar-head {
+  position: absolute;
+  top: 10px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.avatar-shoulders {
+  position: absolute;
+  bottom: 7px;
+  width: 25px;
+  height: 14px;
+  border-radius: 999px 999px 7px 7px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.user-menu-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  min-width: 150px;
+  max-width: calc(100vw - 32px);
+  max-height: min(54svh, 320px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 22px 54px rgba(24, 38, 47, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.user-menu-popover button {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  padding: 10px 11px;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.user-menu-popover button:hover {
+  background: rgba(31, 105, 118, 0.08);
+  color: var(--brand);
+}
+
+.brand,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.eyebrow {
+  margin: 0;
+  color: var(--brand);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+p {
+  margin: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+h1 {
+  color: var(--ink);
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 680;
+  line-height: 1.18;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.workspace {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 430px) 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "question answer"
+    "suggestions answer";
+  overflow: hidden;
+}
+
+.question-panel,
+.suggestions-panel,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.answer-panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 28px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.question-panel {
+  grid-area: question;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid var(--line);
+  background: rgba(250, 252, 247, 0.88);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-intro-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 17px;
+  overflow: hidden;
+  border: 1px solid rgba(31, 105, 118, 0.18);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(195, 226, 177, 0.55), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 248, 232, 0.92));
+  box-shadow:
+    0 18px 46px rgba(36, 61, 49, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-intro-card::after {
+  position: absolute;
+  right: -34px;
+  bottom: -42px;
+  width: 112px;
+  height: 112px;
+  content: "";
+  border-radius: 999px;
+  background: rgba(31, 105, 118, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-intro-icon {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #ffffff;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand), #5c8f6e);
+  box-shadow: 0 10px 22px rgba(31, 105, 118, 0.22);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-intro-copy {
+  position: relative;
+  z-index: 1;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.suggestions-panel {
+  grid-area: suggestions;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "suggestions-heading suggestions-refresh"
+    "suggestions-prompts suggestions-prompts";
+  align-content: start;
+  row-gap: 14px;
+  column-gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: rgba(248, 250, 245, 0.82);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.suggestions-heading {
+  grid-area: suggestions-heading;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.answer-panel {
+  grid-area: answer;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(251, 253, 248, 0.8));
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.section-heading h2 {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer textarea {
+  width: 100%;
+  min-height: 188px;
+  max-height: min(32svh, 320px);
+  overflow: auto;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(31, 105, 118, 0.16);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer textarea:disabled {
+  color: var(--muted);
+  background: #f6f7f3;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.composer button,
+.quick-prompts button,
+.knowledge-link,
+.back-button,
+.settings-open-button,
+.secondary-action-button,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ready-refresh {
+  border-radius: 10px;
+  font: inherit;
+}
+
+.settings-open-button,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.secondary-action-button {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(22, 51, 77, 0.08);
+}
+
+.settings-open-button:hover,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.secondary-action-button:hover {
+  border-color: rgba(24, 87, 123, 0.32);
+  transform: translateY(-1px);
+}
+
+.secondary-action-button:disabled,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-open-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+  transform: none;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ready-refresh {
+  grid-area: suggestions-refresh;
+  align-self: center;
+  justify-self: end;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--brand);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ready-refresh:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: rgba(31, 105, 118, 0.07);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ready-refresh:disabled {
+  color: var(--muted);
+  cursor: progress;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ready-refresh:disabled svg {
+  animation: spin 900ms linear infinite;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer button {
+  min-width: 108px;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #ffffff;
+  padding: 11px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.composer button:disabled {
+  border-color: #b9c4bd;
+  background: #b9c4bd;
+  cursor: not-allowed;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.quick-prompts {
+  grid-area: suggestions-prompts;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 9px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.quick-prompts button {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  line-height: 1.35;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.quick-prompts button:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.quick-prompts button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.answer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.answer-header strong {
+  border: 1px solid rgba(31, 105, 118, 0.22);
+  background: rgba(31, 105, 118, 0.08);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.messages {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 2px 10px 12px 2px;
+  scroll-behavior: smooth;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.empty-state {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.empty-state svg {
+  color: var(--accent);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.empty-state .empty-message {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.empty-state p {
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.empty-state .empty-message {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble {
+  width: min(100%, 940px);
+  display: grid;
+  gap: 10px;
+  padding: 17px 18px;
+  border-radius: 18px;
+  line-height: 1.58;
+  animation: reveal 180ms ease-out;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble-meta h4 {
+  margin: 0;
+  color: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble-user {
+  justify-self: end;
+  max-width: min(760px, 88%);
+  background: linear-gradient(135deg, #eaf7f2, #f6fbf1);
+  border: 1px solid #c8e1d5;
+  color: #123d30;
+  box-shadow: 0 10px 26px rgba(37, 76, 56, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble-user p {
+  white-space: pre-wrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.bubble-assistant {
+  justify-self: start;
+  max-width: min(940px, 94%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 254, 249, 0.96));
+  border: 1px solid rgba(31, 105, 118, 0.13);
+  color: var(--ink);
+  box-shadow: 0 16px 38px rgba(32, 44, 35, 0.07);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-html {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-html :where(p, ul, ol, blockquote, table) {
+  margin: 0;
+}
+
+.assistant-html :where(h2, h3, h4) {
+  margin: 4px 0 0;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.assistant-html :where(ul, ol) {
+  padding-left: 22px;
+}
+
+.assistant-html li + li {
+  margin-top: 6px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-html a {
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for action links generated from assistant contact data. */
+.assistant-html a.oyako-action-link {
+  display: inline;
+  border-radius: 8px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+  padding: 1px 3px;
+}
+
+/* Explains the visual styling or responsive behavior for keyboard focus on assistant action links. */
+.assistant-html a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 62%, white);
+  outline-offset: 3px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-html blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  color: var(--muted);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-html table {
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border-radius: 10px;
+}
+
+.assistant-html th,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.assistant-html td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestions {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 13px;
+  border: 1px solid rgba(31, 105, 118, 0.14);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(195, 226, 177, 0.42), transparent 34%),
+    linear-gradient(135deg, rgba(247, 251, 241, 0.96), rgba(255, 255, 255, 0.94));
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestions-title svg {
+  color: var(--accent);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestion-list button {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(31, 105, 118, 0.24);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 8px 11px 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.latest-answer-suggestion-list button:hover:not(:disabled) {
+  background: rgba(31, 105, 118, 0.1);
+  border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.latest-answer-suggestion-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.error-banner {
+  margin: 0;
+  border-left: 3px solid var(--danger);
+  background: #fff4f2;
+  color: #8c2c1e;
+  padding: 12px 14px;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.success-banner {
+  margin: 0;
+  border-left: 3px solid #1f9d67;
+  background: #effaf4;
+  color: #176146;
+  padding: 12px 14px;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-bar {
+  min-height: 44px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 28px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.live-status,
+.status-message,
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.live-status {
+  min-width: 0;
+  max-width: 100%;
+  justify-content: flex-start;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.live-status svg {
+  color: var(--brand);
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.live-ready {
+  border-color: rgba(25, 128, 93, 0.24);
+  background: rgba(25, 128, 93, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.live-warning {
+  border-color: rgba(194, 122, 30, 0.26);
+  background: rgba(194, 122, 30, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.live-error {
+  border-color: rgba(181, 65, 47, 0.24);
+  background: rgba(181, 65, 47, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-message {
+  min-width: 0;
+  justify-self: center;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-message p,
+.knowledge-link span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-message svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-link {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--brand);
+  padding: 7px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-link:hover {
+  border-color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu-button {
+  width: 54px;
+  height: 38px;
+  border: 1px solid rgba(31, 105, 118, 0.24);
+  background: linear-gradient(135deg, #ffffff, rgba(31, 105, 118, 0.08));
+  color: var(--brand);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(31, 105, 118, 0.12);
+}
+
+.utility-menu-button svg + svg {
+  margin-left: -8px;
+}
+
+.utility-menu-button:hover,
+.utility-menu-button[aria-expanded="true"] {
+  border-color: var(--brand);
+  background: #ffffff;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 24;
+  min-width: 260px;
+  max-width: calc(100vw - 32px);
+  max-height: min(54svh, 360px);
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 22px 50px rgba(24, 38, 31, 0.16);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu button:hover {
+  background: rgba(31, 105, 118, 0.08);
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.utility-menu svg {
+  color: var(--brand);
+  flex: 0 0 auto;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-page {
+  position: fixed;
+  inset: 0;
+  z-index: 34;
+  height: 100dvh;
+  max-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 22px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(224, 169, 40, 0.16), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 248, 242, 0.99)),
+    var(--bg-page);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-page-top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 18px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-page h2 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-intro {
+  max-width: 960px;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  border: 1px solid rgba(31, 105, 118, 0.16);
+  background: rgba(31, 105, 118, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-intro svg {
+  color: var(--brand);
+  flex: 0 0 auto;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-card-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(31, 105, 118, 0.1);
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-card h3 {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.help-card p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 20px;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 248, 242, 0.98)),
+    var(--bg-page);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-dialog-top {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.back-button {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-dialog h2 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-dialog-summary {
+  max-width: 960px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-dialog-summary strong {
+  color: var(--ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-source-panel {
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, white);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 14px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-source-panel label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-source-panel input {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--ink);
+  font: inherit;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.primary-action-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--brand), #7f151a);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 0 16px;
+  box-shadow: 0 14px 28px rgba(183, 25, 34, 0.18);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.primary-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-grid {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-section {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 36px rgba(68, 34, 31, 0.07);
+  padding: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-section-head > div {
+  min-width: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-section-head h3 {
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-bank-section-head span {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table-scroll {
+  max-height: min(56svh, 580px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: 14px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table th,
+.knowledge-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--bg-page) 82%, white);
+  color: var(--ink);
+  font-weight: 950;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.knowledge-table a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-weight: 750;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(113, 103, 101, 0.12);
+  color: var(--muted);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-ok {
+  background: color-mix(in srgb, var(--ready) 16%, white);
+  color: #12613f;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-http404,
+.status-http418,
+.status-http429,
+.status-timeout,
+.status-error,
+.status-unsupported_protocol,
+.status-empty_content {
+  background: color-mix(in srgb, var(--danger) 14%, white);
+  color: var(--danger);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.archive-select {
+  min-width: 5.5rem;
+  border: 1px solid rgba(13, 92, 103, 0.2);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.42rem 0.75rem;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.archive-select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 28%, transparent);
+  outline-offset: 2px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.warning-status-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 8%, white);
+  color: var(--danger);
+  font: inherit;
+  font-weight: 800;
+  padding: 0.42rem 0.7rem;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.warning-status-link:hover {
+  background: color-mix(in srgb, var(--danger) 14%, white);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.warning-status-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  outline-offset: 2px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  min-height: 100dvh;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(76rem, 100%);
+  max-height: calc(100dvh - clamp(1.5rem, 4vw, 3rem));
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid rgba(13, 92, 103, 0.14);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 248, 0.98));
+  box-shadow: 0 28px 80px rgba(11, 46, 54, 0.18);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border-bottom: 1px solid rgba(13, 92, 103, 0.12);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-header h2,
+.log-summary-card h3,
+.log-issue-card h4 {
+  margin: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-header p,
+.log-summary-card p,
+.log-issue-card p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-resource-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin-top: 0.35rem;
+  color: var(--brand);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-resource-link:hover {
+  text-decoration: underline;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-body {
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-loading,
+.log-viewer-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 18px;
+  padding: 0.85rem 1rem;
+  font-weight: 800;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-loading {
+  background: color-mix(in srgb, var(--brand) 8%, white);
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-viewer-error {
+  background: color-mix(in srgb, var(--danger) 8%, white);
+  color: var(--danger);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-card,
+.log-issue-card {
+  border: 1px solid rgba(13, 92, 103, 0.12);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 32px rgba(11, 46, 54, 0.08);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-grid div {
+  border-radius: 16px;
+  background: rgba(13, 92, 103, 0.06);
+  padding: 0.75rem;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-grid dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-summary-grid dd {
+  margin: 0.2rem 0 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-action-bar,
+.log-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-action-bar button,
+.log-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(13, 92, 103, 0.16);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-action-bar button:hover,
+.log-card-actions button:hover {
+  border-color: rgba(13, 92, 103, 0.28);
+  background: rgba(25, 118, 131, 0.07);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-action-bar button:disabled,
+.log-card-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-issue-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-issue-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.log-card-actions {
+  align-content: start;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+@media (max-width: 760px) {
+  .log-viewer-panel {
+    border-radius: 22px;
+  }
+
+  .log-viewer-header,
+  .log-summary-card,
+  .log-issue-card {
+    grid-template-columns: 1fr;
+  }
+
+  .log-viewer-header {
+    flex-direction: column;
+  }
+
+  .log-card-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.preview-cell {
+  max-width: 420px;
+  color: var(--muted);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: rgba(28, 24, 23, 0.42);
+  backdrop-filter: blur(8px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-dialog {
+  width: min(980px, 100%);
+  max-height: min(820px, calc(100vh - 44px));
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, var(--brand) 16%, white);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 244, 0.98)),
+    #ffffff;
+  box-shadow: 0 32px 80px rgba(50, 30, 25, 0.28);
+  padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-head h2 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-meta {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-field {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-field textarea {
+  min-height: min(360px, 44svh);
+  max-height: 54svh;
+  overflow: auto;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  color: var(--ink);
+  background: #ffffff;
+  font: 500 15px/1.65 "Atkinson Hyperlegible", "Segoe UI", sans-serif;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-field textarea:focus {
+  outline: 3px solid color-mix(in srgb, var(--brand) 26%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 54%, var(--line));
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.table-actions button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.table-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress {
+  max-width: 980px;
+  max-height: min(60svh, 520px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, white);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 246, 242, 0.94), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+  box-shadow: 0 18px 38px rgba(68, 34, 31, 0.09);
+  padding: 14px;
+  outline: none;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress:focus-visible {
+  box-shadow: 0 0 0 3px rgba(183, 25, 34, 0.2), 0 18px 38px rgba(68, 34, 31, 0.09);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress-top span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(183, 25, 34, 0.12);
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), var(--ready));
+  transition: width 260ms ease;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  list-style: none;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress .progress-done {
+  color: var(--ready);
+  font-weight: 800;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress .progress-active {
+  color: var(--brand);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress .progress-error {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.progress-step-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.progress-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(113, 103, 101, 0.36);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.compact-progress-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ack-button {
+  border: 1px solid color-mix(in srgb, var(--brand) 26%, white);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand), #7f151a);
+  color: white;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 9px 13px;
+  box-shadow: 0 12px 24px rgba(183, 25, 34, 0.18);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.ack-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-panel {
+  min-width: 0;
+  max-height: min(70svh, 680px);
+  max-width: 860px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form label {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form select {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 12px;
+  font: inherit;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form input,
+.new-source-panel input,
+.new-source-panel select,
+.new-source-panel textarea,
+.upload-card input {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 12px;
+  font: inherit;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.new-source-panel textarea {
+  min-height: 86px;
+  padding: 12px;
+  resize: vertical;
+  overflow: auto;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form select:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-form input:disabled,
+.new-source-panel input:disabled,
+.new-source-panel select:disabled,
+.new-source-panel textarea:disabled,
+.upload-card input:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-section-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand) 14%, white);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand) 7%, white);
+  color: var(--brand);
+  padding: 12px 14px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-section-title strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 950;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.settings-section-title p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.local-source-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand) 14%, white);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  line-height: 1.5;
+  padding: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-row-selected {
+  outline: 2px solid color-mix(in srgb, var(--brand) 40%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--brand) 6%, white);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: color-mix(in srgb, var(--brand) 9%, white);
+  color: var(--brand);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-type-local_files {
+  background: color-mix(in srgb, var(--ready) 12%, white);
+  color: #12613f;
+}
+
+/* Explains the visual styling or responsive behavior for user-managed web-link sources. */
+.source-type-web_links {
+  background: color-mix(in srgb, var(--brand) 12%, white);
+  color: var(--brand);
+}
+
+/* Explains the visual styling or responsive behavior for the document addition method in source rows. */
+.document-addition-method {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--accent) 13%, white);
+  color: color-mix(in srgb, var(--brand) 78%, var(--ink));
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-description-cell,
+.muted-address,
+.section-subtitle {
+  color: var(--muted);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.document-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.local-file-dialog {
+  width: min(1040px, 100%);
+  max-height: min(880px, calc(100vh - 44px));
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, var(--brand) 16%, white);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 244, 0.98)), #ffffff;
+  box-shadow: 0 32px 80px rgba(50, 30, 25, 0.28);
+  padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.file-picker-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  overflow: visible;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 30px rgba(68, 34, 31, 0.06);
+  padding: 15px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card-error {
+  border-color: color-mix(in srgb, var(--danger) 38%, white);
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card h3 {
+  color: var(--ink);
+  font-size: 17px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-preview-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-preview {
+  max-height: 4.9em;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-page) 78%, white);
+  color: var(--muted);
+  line-height: 1.55;
+  padding: 10px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.upload-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card {
+  min-height: 220px;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.84);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card h3 {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card-footer span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.source-card-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes reveal {
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+@media (max-width: 920px) {
+  /* Lets modal dialogs use the available mobile width without horizontal overflow. */
+  .modal-layer {
+    place-items: stretch;
+    padding: 14px;
+  }
+
+  /* Keeps every modal surface inside the mobile viewport with internal scrolling. */
+  .modal-surface {
+    max-height: calc(100dvh - 28px);
+  }
+
+  /* Makes standardized form and message dialogs fill the available mobile width. */
+  .message-dialog,
+  .confirm-dialog,
+  .source-form-dialog,
+  .progress-dialog {
+    width: 100%;
+  }
+
+  /* Stacks confirmation content for narrow screens. */
+  .confirm-dialog {
+    grid-template-columns: 1fr;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-height: auto;
+    padding: 18px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .new-chat-button,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .settings-open-button {
+    min-height: 42px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .oyak-brand-link {
+    max-width: 100%;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .oyak-brand-text {
+    font-size: 13px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .brand-lockup {
+    align-items: flex-start;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(360px, 1fr);
+    grid-template-areas:
+      "question"
+      "suggestions"
+      "answer";
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .question-panel,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .suggestions-panel {
+    border-right: 0;
+  }
+
+  .question-panel,
+  .suggestions-panel,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .answer-panel {
+    padding: 18px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .answer-panel {
+    min-height: 360px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .status-bar {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 8px;
+    padding: 10px 18px;
+  }
+
+  .live-status,
+  .status-message,
+  .knowledge-link,
+  .utility-menu-wrap,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .utility-menu-button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .utility-menu-button {
+    justify-content: center;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .utility-menu {
+    left: 0;
+    right: auto;
+    bottom: calc(100% + 8px);
+    width: min(100%, 320px);
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .status-message {
+    justify-self: start;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .source-dialog {
+    padding: 18px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .help-page {
+    padding: 18px;
+  }
+
+  .source-dialog-top,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .help-page-top {
+    grid-template-columns: 1fr;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .source-action-bar {
+    justify-content: flex-start;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .settings-open-button {
+    align-self: flex-start;
+  }
+
+  .source-dialog-summary,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .source-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .new-source-panel {
+    grid-template-columns: 1fr;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .document-editor-overlay {
+    padding: 14px;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .document-editor-dialog {
+    padding: 16px;
+    max-height: calc(100vh - 28px);
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .document-editor-head,
+  .document-editor-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .document-editor-field textarea {
+    min-height: min(300px, 42svh);
+    max-height: 48svh;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .settings-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .local-file-dialog {
+    padding: 16px;
+    max-height: calc(100vh - 28px);
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .document-section-actions,
+  .file-picker-row,
+  .upload-card-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+@media (max-width: 560px) {
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+  }
+
+  .new-chat-button,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .oyak-brand-link {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .oyak-brand-link {
+    justify-content: flex-start;
+  }
+
+  .avatar-button,
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .settings-open-button {
+    justify-self: start;
+  }
+}
+/* Explains the visual styling or responsive behavior for this UI selector. */
+.status-loading-icon {
+  animation: oyako-status-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes oyako-status-spin {
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Explains the visual styling or responsive behavior for this UI selector. */
+@media (prefers-reduced-motion: reduce) {
+  /* Explains the visual styling or responsive behavior for this UI selector. */
+  .status-loading-icon {
+    animation: none;
+  }
+}
+
+/* Explains the visual styling or responsive behavior for verified answer source attributions. */
+.answer-source-line {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--brand) 20%, white);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(247, 251, 244, 0.96), rgba(255, 255, 255, 0.98)),
+    #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Explains the visual styling or responsive behavior for the source label inside answer attributions. */
+.answer-source-line strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+/* Explains the visual styling or responsive behavior for grouped source attribution entries. */
+.answer-source-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Explains the visual styling or responsive behavior for the source name in attribution groups. */
+.answer-source-name {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+/* Explains the visual styling or responsive behavior for source and document separators. */
+.source-separator,
+.document-separator {
+  color: color-mix(in srgb, var(--muted) 68%, white);
+}
+
+/* Explains the visual styling or responsive behavior for each attributed document token. */
+.answer-source-document {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for clickable attributed web documents. */
+.answer-source-document a,
+.answer-source-document button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 850;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Explains the visual styling or responsive behavior for focused attributed document actions. */
+.answer-source-document a:focus-visible,
+.answer-source-document button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 30%, white);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Explains the visual styling or responsive behavior for the full-page local document viewer. */
+.document-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(224, 169, 40, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 248, 242, 0.99)),
+    var(--bg-page);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Explains the visual styling or responsive behavior for the local document viewer header. */
+.document-viewer-top {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 16px;
+}
+
+/* Explains the visual styling or responsive behavior for the document viewer title. */
+.document-viewer-top h2 {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for the document viewer metadata. */
+.document-viewer-meta {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Explains the visual styling or responsive behavior for the local document viewer body. */
+.document-viewer-body {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 58px rgba(22, 51, 77, 0.1);
+  padding: clamp(16px, 2.4vw, 28px);
+}
+
+/* Explains the visual styling or responsive behavior for normalized local document text. */
+.content-display {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font: 500 15px/1.72 "Lexend", "Segoe UI", sans-serif;
+}
+
+/* Explains the visual styling or responsive behavior for compact source rows on small screens. */
+@media (max-width: 720px) {
+  /* Explains the visual styling or responsive behavior for small-screen attribution rows. */
+  .answer-source-line {
+    align-items: flex-start;
+  }
+
+  /* Explains the visual styling or responsive behavior for the small-screen local document viewer. */
+  .document-viewer {
+    padding: 16px;
+  }
+
+  /* Explains the visual styling or responsive behavior for the small-screen document viewer header. */
+  .document-viewer-top {
+    grid-template-columns: 1fr;
+  }
+}
