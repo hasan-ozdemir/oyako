@@ -60,3 +60,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 056. Added Azure Container Apps deploy script using Azure CLI and Docker Desktop.
 - 057. Configured Azure deploy to include Azure and Ollama Cloud providers while disabling Ollama Local.
 - 058. Configured deploy script to publish Web UI and API through a single ACA endpoint.
+- 059. Updated deploy script to use deterministic ACR image tag latest.
