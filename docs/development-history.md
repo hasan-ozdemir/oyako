@@ -42,3 +42,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 038. Improved keyboard and screen-reader behavior across ready questions and tables.
 - 039. Added status bar live messages for loading, ready, question, answer, offline, crawl, cache, and refresh phases.
 - 040. Ensured status bar never renders blank state.
+- 041. Removed noisy fallback and legacy UI copy during pre-alpha cutovers.
