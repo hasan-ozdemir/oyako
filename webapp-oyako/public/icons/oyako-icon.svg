@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Oyako</title>
+  <defs>
+    <linearGradient id="bg" x1="82" x2="430" y1="48" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset=".54" stop-color="#19536d"/>
+      <stop offset="1" stop-color="#e0a928"/>
+    </linearGradient>
+    <linearGradient id="card" x1="154" x2="358" y1="146" y2="366" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <path d="M132 202c0-42 34-76 76-76h98c42 0 76 34 76 76v70c0 42-34 76-76 76h-48l-68 50c-11 8-26 0-26-14v-48c-20-14-32-37-32-64v-70Z" fill="url(#card)"/>
+  <path d="M197 217h118M197 263h86" stroke="#0f172a" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="371" cy="142" r="28" fill="#facc15"/>
+</svg>
