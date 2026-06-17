@@ -58,3 +58,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 054. Added Dockerfile for one-container full-stack runtime.
 - 055. Added local Docker script and cleanup behavior.
 - 056. Added Azure Container Apps deploy script using Azure CLI and Docker Desktop.
+- 057. Configured Azure deploy to include Azure and Ollama Cloud providers while disabling Ollama Local.
