@@ -36,3 +36,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 032. Shared local-file and web-link parsing pipelines for supported document types.
 - 033. Added file upload parsing for txt, docx, pdf, pptx, rtf, epub, html, htm, and markdown.
 - 034. Added document editor behavior for local files and link editor behavior for web documents.
+- 035. Added warning log viewer behavior for failed sources and documents.
