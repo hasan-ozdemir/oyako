@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Oyako, Oyak Dijital web kaynaklarıyla beslenen tek sayfalık soru-cevap platformudur." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Oyako" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Oyako: Oyak Dijital Soru-Cevap Platformu</title>
+    <style>
+      .oyako-boot-status {
+        position: fixed;
+        left: 18px;
+        bottom: 18px;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 38px;
+        padding: 9px 13px;
+        border: 1px solid rgba(31, 105, 118, 0.18);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 14px 30px rgba(32, 44, 35, 0.12);
+        color: #1b3028;
+        font: 700 13px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .oyako-boot-status__icon {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(31, 105, 118, 0.22);
+        border-top-color: #1f6976;
+        border-radius: 999px;
+        animation: oyako-boot-spin 0.9s linear infinite;
+      }
+
+      @keyframes oyako-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .oyako-boot-status__icon {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="oyako-boot-status" role="status" aria-live="polite">
+        <span class="oyako-boot-status__icon" aria-hidden="true"></span>
+        <span>Sayfa Yükleniyor</span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
