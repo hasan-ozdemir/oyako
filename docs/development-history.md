@@ -12,3 +12,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 008. Added source and document lifecycle tables for knowledge-bank management.
 - 009. Implemented system instruction cache generation from enabled knowledge documents.
 - 010. Persisted and reloaded knowledge cache state to keep startup fast.
+- 011. Added one-shot chat behavior with system and user messages only.
