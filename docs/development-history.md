@@ -106,3 +106,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 102. Reinforced frontend modal accessibility based on session evidence.
 - 103. Reinforced SQLite schema bootstrap based on session evidence.
 - 104. Reinforced AI provider routing based on session evidence.
+- 105. Reinforced ready question filtering based on session evidence.
