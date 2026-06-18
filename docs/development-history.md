@@ -63,3 +63,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 059. Updated deploy script to use deterministic ACR image tag latest.
 - 060. Added ACR cleanup so the repository retains only the latest image.
 - 061. Added public endpoint smoke checks for Web UI, API health, knowledge health, and chat streaming.
+- 062. Added docs for architecture, CI/CD/CT, and UI production readiness.
