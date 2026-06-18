@@ -91,3 +91,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 087. Reinforced crawler fail-forward behavior based on session evidence.
 - 088. Reinforced Docker runtime hygiene based on session evidence.
 - 089. Reinforced Azure deployment validation based on session evidence.
+- 090. Reinforced public repository sanitization based on session evidence.
