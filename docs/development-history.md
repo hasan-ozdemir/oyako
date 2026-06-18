@@ -75,3 +75,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 071. Prepared Azure ACA post-GitHub deployment flow with final public URL reporting.
 - 072. Reinforced frontend modal accessibility based on session evidence.
 - 073. Reinforced SQLite schema bootstrap based on session evidence.
+- 074. Reinforced AI provider routing based on session evidence.
