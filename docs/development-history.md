@@ -97,3 +97,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 093. Reinforced SQLite schema bootstrap based on session evidence.
 - 094. Reinforced AI provider routing based on session evidence.
 - 095. Reinforced ready question filtering based on session evidence.
+- 096. Reinforced knowledge cache activation based on session evidence.
