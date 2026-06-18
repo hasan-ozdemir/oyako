@@ -65,3 +65,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 061. Added public endpoint smoke checks for Web UI, API health, knowledge health, and chat streaming.
 - 062. Added docs for architecture, CI/CD/CT, and UI production readiness.
 - 063. Added AGENTS guide to preserve project conventions for future Codex sessions.
+- 064. Sanitized public repository inputs and excluded runtime data from Git.
