@@ -94,3 +94,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 090. Reinforced public repository sanitization based on session evidence.
 - 091. Reinforced backend source lifecycle based on session evidence.
 - 092. Reinforced frontend modal accessibility based on session evidence.
+- 093. Reinforced SQLite schema bootstrap based on session evidence.
