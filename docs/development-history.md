@@ -73,3 +73,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 069. Captured session metrics including user prompts, assistant responses, tool calls, tool outputs, tests, builds, deploys, and errors.
 - 070. Prepared GitHub publication under hasan-ozdemir/oyako.
 - 071. Prepared Azure ACA post-GitHub deployment flow with final public URL reporting.
+- 072. Reinforced frontend modal accessibility based on session evidence.
