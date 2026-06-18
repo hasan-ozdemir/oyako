@@ -95,3 +95,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 091. Reinforced backend source lifecycle based on session evidence.
 - 092. Reinforced frontend modal accessibility based on session evidence.
 - 093. Reinforced SQLite schema bootstrap based on session evidence.
+- 094. Reinforced AI provider routing based on session evidence.
