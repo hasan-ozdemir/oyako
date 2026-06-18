@@ -109,3 +109,4 @@ This document summarizes the session-derived engineering timeline used to recons
 - 105. Reinforced ready question filtering based on session evidence.
 - 106. Reinforced knowledge cache activation based on session evidence.
 - 107. Reinforced crawler fail-forward behavior based on session evidence.
+- 108. Reinforced Docker runtime hygiene based on session evidence.
