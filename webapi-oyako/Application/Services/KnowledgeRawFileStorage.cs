@@ -6,6 +6,17 @@ namespace webapi_oyako.Application.Services;
 // Provides deterministic GUID-based storage paths and safe raw-file operations for supported documents.
 public static class KnowledgeRawFileStorage
 {
+    // Resolves the deploy-safe data root while preserving the repository-local default for development.
+    public static string ResolveDataRoot(string contentRootPath)
+    {
+        var configuredRoot = Environment.GetEnvironmentVariable("Storage__DataRoot");
+        var dataRoot = string.IsNullOrWhiteSpace(configuredRoot)
+            ? Path.Combine(contentRootPath, "data")
+            : configuredRoot;
+
+        return Path.GetFullPath(dataRoot);
+    }
+
     // Builds the canonical raw-file directory used by all document ingestion paths.
     public static string BuildStorageDirectory(string dataRoot, KnowledgeSource source, string sourceFolderGuid, string folderDocumentGuid)
     {

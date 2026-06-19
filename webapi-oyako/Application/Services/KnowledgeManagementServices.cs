@@ -110,7 +110,7 @@ public sealed class LocalKnowledgeRebuildService : ILocalKnowledgeRebuildService
         IWebPageRepository repository,
         IKnowledgeFileParser parser)
     {
-        _dataRoot = Path.Combine(environment.ContentRootPath, "data");
+        _dataRoot = KnowledgeRawFileStorage.ResolveDataRoot(environment.ContentRootPath);
         _repository = repository;
         _parser = parser;
     }

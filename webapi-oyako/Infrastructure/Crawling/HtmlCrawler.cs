@@ -83,7 +83,7 @@ public sealed class HtmlCrawler : IWebCrawler
         _knowledgeFileParser = knowledgeFileParser;
         _webPageRepository = webPageRepository;
         _pageRenderer = pageRenderer;
-        _dataRoot = Path.Combine(environment?.ContentRootPath ?? Directory.GetCurrentDirectory(), "data");
+        _dataRoot = KnowledgeRawFileStorage.ResolveDataRoot(environment?.ContentRootPath ?? Directory.GetCurrentDirectory());
     }
 
     // Executes this component behavior as part of the Oyako application flow.

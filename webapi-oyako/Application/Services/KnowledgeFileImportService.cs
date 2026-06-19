@@ -26,7 +26,7 @@ public sealed class KnowledgeFileImportService : IKnowledgeFileImportService
         _repository = repository;
         _parser = parser;
         _settingsService = settingsService;
-        _dataRoot = Path.Combine(environment.ContentRootPath, "data");
+        _dataRoot = KnowledgeRawFileStorage.ResolveDataRoot(environment.ContentRootPath);
     }
 
     // Parses selected files without persisting raw bytes.

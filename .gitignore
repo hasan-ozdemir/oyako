@@ -14,10 +14,13 @@ ollama-cloud.env
 .verification/
 runtime-backups/
 playwright-report/
+.oyako-deploy/
 
 # Backend runtime data
 webapi-oyako/Data/
 webapi-oyako/Data/**
+webapi-oyako/data/
+webapi-oyako/data/**
 webapi-oyako/.certificates/
 webapi-oyako/.certificates/**
 webapi-oyako/bin/
