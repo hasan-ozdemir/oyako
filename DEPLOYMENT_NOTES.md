@@ -15,6 +15,8 @@
 - Azure Container Apps Environment
 - Azure Container App with one always-on replica
 
+For cutover from the previous pre-alpha ACA script, `deploy-aca.cmd` also removes only these exact legacy Oyako resource names when they exist in `rg-oyako`: `oyako`, `aca-oyako-env`, and `acaoyako<subscription8>weacr`. It does not remove unrelated untagged resources or shared AI resources.
+
 `deploy-awa.cmd` manages only resources tagged with `app=oyako`, `managed-by=deploy-awa`, and `deployment-scope=oyako-awa`:
 
 - Linux Basic App Service Plan

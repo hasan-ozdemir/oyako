@@ -317,6 +317,18 @@ function Get-ContainerEnvironment() {
     return FromJson $result.Text
 }
 
+function Get-LegacyContainerApp([string]$Name) {
+    $result = TryAz @("containerapp", "show", "--name", $Name, "--resource-group", $ResourceGroup, "-o", "json")
+    if (-not $result.Ok) { return $null }
+    return FromJson $result.Text
+}
+
+function Get-LegacyContainerEnvironment([string]$Name) {
+    $result = TryAz @("containerapp", "env", "show", "--name", $Name, "--resource-group", $ResourceGroup, "-o", "json")
+    if (-not $result.Ok) { return $null }
+    return FromJson $result.Text
+}
+
 function Remove-OwnedContainerApp() {
     $app = Get-ContainerApp
     Assert-OwnedOrMissing $app $AppName "Container App"
@@ -334,6 +346,42 @@ function Remove-OwnedEnvironment() {
         Step "Removing non-compliant Container Apps Environment $EnvironmentName"
         Az @("containerapp", "env", "delete", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
         Wait-ResourceGone "Container Apps Environment $EnvironmentName" { [bool](Get-ContainerEnvironment) }
+    }
+}
+
+function Remove-LegacyAcaCutoverResources([string]$LegacyAcrName) {
+    $legacyAppName = "oyako"
+    $legacyEnvironmentName = "aca-oyako-env"
+
+    if ($legacyAppName -ne $AppName) {
+        $legacyApp = Get-LegacyContainerApp $legacyAppName
+        if ($legacyApp) {
+            Step "Removing legacy Container App $legacyAppName"
+            Az @("containerapp", "delete", "--name", $legacyAppName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+            Wait-ResourceGone "Legacy Container App $legacyAppName" { [bool](Get-LegacyContainerApp $legacyAppName) }
+        }
+    }
+
+    if ($legacyEnvironmentName -ne $EnvironmentName) {
+        $legacyEnvironment = Get-LegacyContainerEnvironment $legacyEnvironmentName
+        if ($legacyEnvironment) {
+            Step "Removing legacy Container Apps Environment $legacyEnvironmentName"
+            Az @("containerapp", "env", "delete", "--name", $legacyEnvironmentName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+            Wait-ResourceGone "Legacy Container Apps Environment $legacyEnvironmentName" { [bool](Get-LegacyContainerEnvironment $legacyEnvironmentName) }
+        }
+    }
+
+    if ($LegacyAcrName -ne $acrName) {
+        $legacyAcr = Get-Acr $LegacyAcrName
+        if ($legacyAcr) {
+            if ([string]$legacyAcr.resourceGroup -ne $ResourceGroup) {
+                Fail "Legacy ACR '$LegacyAcrName' exists outside $ResourceGroup. Refusing to modify it."
+            }
+
+            Step "Removing legacy ACR $LegacyAcrName"
+            Az @("acr", "delete", "--name", $LegacyAcrName, "--resource-group", $ResourceGroup, "--yes")
+            Wait-ResourceGone "Legacy ACR $LegacyAcrName" { [bool](Get-Acr $LegacyAcrName) }
+        }
     }
 }
 
@@ -473,6 +521,8 @@ try {
     Step "Ensuring deterministic ACR"
     $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
     $acrName = "oyakoacr$($subscriptionCompact.Substring(0, 12))"
+    $legacyAcrName = "acaoyako$($subscriptionCompact.Substring(0, 8))weacr"
+    Remove-LegacyAcaCutoverResources $legacyAcrName
     $acr = Get-Acr $acrName
     Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
     if ($acr -and (([string]$acr.resourceGroup -ne $ResourceGroup -or (Normalize-Location ([string]$acr.location)) -ne $Location))) {
