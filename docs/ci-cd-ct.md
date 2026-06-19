@@ -150,14 +150,12 @@ Secrets must not be committed.
 
 ### 6.4 Deployment Targets
 
-Possible deployment targets:
+Current minimal deployment targets:
 
-- Azure App Service for backend plus Static Web Apps or App Service for frontend.
-- Azure Container Apps with separate backend/frontend containers.
-- VM/IIS deployment for Windows-based hosting.
-- Single-host local-style deployment for internal demos.
+- `deploy-aca.cmd`: one Azure Container Registry Basic SKU, one Azure Container Apps Environment, and one always-on Container App in `italynorth`, using the single image `oyako:latest`.
+- `deploy-awa.cmd`: one Linux Basic B1 App Service Plan and one Azure Web App in `italynorth`, using direct ZIP deploy from locally published `linux-x64` source and startup-time Playwright dependency installation.
 
-The selected target must provide persistent storage for SQLite and secure environment variables for AI providers.
+Both targets serve the React SPA and ASP.NET API from one public hostname, keep SQLite as an app-local file, and require secure environment variables for AI providers. They do not create Azure Storage, Static Web Apps, separate API apps, Key Vault, Application Insights, Redis, Cosmos DB, or a managed SQL/PostgreSQL/MySQL database.
 
 ## 7. GitHub Actions Blueprint
 
@@ -333,6 +331,6 @@ Recommended rollback steps:
 
 ## 14. Public GitHub and Azure ACA Release Flow
 
-Release `2026.6.18.300` uses a public GitHub repository and Azure Container Apps as the deploy target. The release sequence is: sanitize source, initialize Git, create the detailed commit history, push to `github.com/hasan-ozdemir/oyako`, build one Docker image, push it as `oyako:latest`, deploy Container Apps, run public endpoint checks, and verify ACR contains only the latest image tag.
+Release `2026.6.18.300` uses a public GitHub repository and minimal Azure deploy targets. The ACA release sequence is: sanitize source, initialize Git, create the detailed commit history, push to `github.com/hasan-ozdemir/oyako`, build one Docker image, push it as `oyako:latest`, deploy Container Apps, run public endpoint checks, and verify ACR contains only the latest image tag. The AWA sequence publishes ASP.NET with the React SPA under `wwwroot`, ZIP deploys one Web App, and runs the same public endpoint checks without Docker or ACR.
 
 For pre-alpha simplicity, ACR image retention is intentionally aggressive. The `oyako` repository should not retain older tags after a successful deploy.

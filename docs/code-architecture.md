@@ -14,6 +14,8 @@ The repository has two primary applications and shared operational files.
 - `webapp-oyako`: React + TypeScript + Vite frontend, SPA/PWA UI, API client, Playwright/Axe tests, and visual system.
 - `docs`: architecture, CI/CD/CT, and engineering documentation.
 - `run-app.cmd`: local automation that restarts and runs backend and frontend together.
+- `Dockerfile`: production single-process image that serves the React SPA from ASP.NET `wwwroot` on port `8080`.
+- `deploy-aca.cmd` and `deploy-awa.cmd`: minimal Azure deployment scripts for Container Apps and direct Linux Web App hosting.
 - `oyako.env`: local environment variable source for sensitive AI provider configuration.
 
 Generated folders such as `bin`, `obj`, `node_modules`, `dist`, and Playwright artifacts are not part of source architecture.
@@ -195,11 +197,12 @@ Full-stack validation starts backend and frontend, checks health endpoints, opti
 
 ## 10. Configuration and Operations
 
-- Backend ports: 5000 and 5001.
-- Frontend port: 3000.
-- SQLite is portable and hosted by the web API.
+- Local development ports: backend 5000/5001 and frontend 3000.
+- Single-host/container port: 8080.
+- SQLite is portable and hosted by the web API. Azure deploy scripts keep it as a local file inside the app/container and do not create external managed database resources.
 - `oyako.env` supplies local secrets such as Azure AI API key.
-- Azure is the default provider, Ollama remains switchable through settings.
+- `azure-cloud.env` and `ollama-cloud.env` supply cloud deployment secrets at deploy time and must not be committed.
+- Azure/Ollama Cloud are deployment-capable providers; Ollama Local is disabled for Azure-hosted runs.
 - Knowledge refresh may call external web resources and AI providers, so tests should distinguish fast mock tests from slower special tests.
 
 ## 11. Engineering Conventions
@@ -226,4 +229,7 @@ To add new knowledge source behavior, update crawler/cleaner/store/cache flow to
 
 This release is the public pre-alpha baseline. It treats the current schema and APIs as the primary behavior, excludes runtime state from source control, and publishes with a synthetic but evidence-driven Git history built from Codex session messages, assistant summaries, tool calls, tool outputs, code state, and documentation state.
 
-The Azure deployment path is now intentionally single-image: `deploy-aca.cmd` builds and pushes `oyako:latest`, updates Azure Container Apps, verifies public health and chat behavior, and confirms the ACR repository contains only the `latest` tag.
+The Azure deployment paths are intentionally minimal:
+
+- `deploy-aca.cmd` builds and pushes `oyako:latest`, recreates only ACA-scope tagged resources in `italynorth`, deploys one always-on Container App, verifies public health/browser behavior, and confirms the ACR repository contains only the `latest` tag.
+- `deploy-awa.cmd` locally publishes ASP.NET for `linux-x64` with the React SPA in `wwwroot`, deploys one ZIP to a single Linux Azure Web App on a Basic always-on App Service Plan, installs Playwright runtime dependencies at startup, and verifies public health/browser behavior without Docker or ACR.

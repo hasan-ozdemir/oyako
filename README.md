@@ -8,8 +8,8 @@ Oyako is a Turkish full-stack question-answer platform for curated knowledge sou
 - Frontend: React, TypeScript, Vite, PWA-ready SPA
 - Backend: ASP.NET 10, Dapper, SQLite, Playwright-assisted scraping
 - AI providers: Azure AI, Ollama Cloud, Ollama Local
-- Container target: one full-stack Docker image
-- Azure target: Azure Container Apps with ACR image `oyako:latest`
+- Container target: one full-stack Docker image on port `8080`
+- Azure targets: Azure Container Apps with ACR image `oyako:latest`, or one Linux Azure Web App with direct ZIP deploy
 
 ## Local Development
 
@@ -25,7 +25,7 @@ The local script starts the backend on ports `5000` and `5001`, starts the front
 .\run-docker.cmd
 ```
 
-The Docker flow builds the frontend and backend into one local container image and exposes the application on `http://localhost:3000` and the API through `/api`.
+The Docker flow builds the frontend and backend into one local container image and exposes the application and API on `http://localhost:8080`. It requires `azure-cloud.env` and `ollama-cloud.env` for cloud-provider configuration.
 
 ## Azure Container Apps Deployment
 
@@ -33,7 +33,15 @@ The Docker flow builds the frontend and backend into one local container image a
 .\deploy-aca.cmd
 ```
 
-The deploy script uses Azure CLI, Docker Desktop, `azure-cloud.env`, `ollama-cloud.env`, and their `.example` templates. It builds and pushes `oyako:latest`, updates the Container App, verifies public endpoints, runs a Q&A smoke test unless skipped, and cleans ACR so the `oyako` repository keeps only `latest`.
+The Container Apps script uses Azure CLI, Docker Desktop, `azure-cloud.env`, `ollama-cloud.env`, and their `.example` templates. It targets subscription `az2vs`, resource group `rg-oyako`, and `italynorth`; builds and pushes only `oyako:latest`; creates or recreates only resources tagged for the ACA scope; and keeps the ACR `oyako` repository limited to `latest`.
+
+## Azure Web App Deployment
+
+```powershell
+.\deploy-awa.cmd
+```
+
+The Web App script publishes the ASP.NET API for Linux with the React SPA copied into `wwwroot`, then deploys the ZIP to one Linux Azure Web App on a Basic always-on App Service Plan. It installs Playwright Chromium dependencies at startup so `/health/browser` can pass without Docker or ACR. It uses the same `az2vs` / `rg-oyako` / `italynorth` target and does not create ACR, Azure Storage, Key Vault, Application Insights, or an external managed database.
 
 ## Secret Policy
 
