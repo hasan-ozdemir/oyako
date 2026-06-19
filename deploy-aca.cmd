@@ -1,18 +1,17 @@
 @echo off
-REM Codex developer note: Deploys the Oyako full-stack Docker image to Azure Container Apps.
-setlocal EnableExtensions DisableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
-set "DEPLOY_ACA_SELF=%~f0"
-set "DEPLOY_ACA_PS1=%TEMP%\oyako-deploy-aca-%RANDOM%-%RANDOM%.ps1"
+set "OYAKO_SCRIPT_SELF=%~f0"
+set "OYAKO_SCRIPT_PS1=%TEMP%\oyako-deploy-aca-%RANDOM%-%RANDOM%.ps1"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $src=Get-Content -Raw -LiteralPath $env:DEPLOY_ACA_SELF; $parts=$src -split '(?m)^:POWERSHELL_BEGIN\r?$',2; if($parts.Count -lt 2){ throw 'PowerShell payload marker was not found.' }; Set-Content -LiteralPath $env:DEPLOY_ACA_PS1 -Value $parts[1] -Encoding UTF8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $src=Get-Content -Raw -LiteralPath $env:OYAKO_SCRIPT_SELF; $parts=$src -split '(?m)^:POWERSHELL_BEGIN\r?$',2; if($parts.Count -lt 2){ throw 'PowerShell payload marker was not found.' }; Set-Content -LiteralPath $env:OYAKO_SCRIPT_PS1 -Value $parts[1] -Encoding UTF8"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%DEPLOY_ACA_PS1%" %*
-set "DEPLOY_ACA_EXIT=%ERRORLEVEL%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%OYAKO_SCRIPT_PS1%"
+set "OYAKO_SCRIPT_EXIT=%ERRORLEVEL%"
 
-del "%DEPLOY_ACA_PS1%" >nul 2>nul
-exit /b %DEPLOY_ACA_EXIT%
+del "%OYAKO_SCRIPT_PS1%" >nul 2>nul
+exit /b %OYAKO_SCRIPT_EXIT%
 
 :POWERSHELL_BEGIN
 param()
@@ -21,208 +20,197 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Script -ErrorAction SilentlyContinue
 
-$Root = Split-Path -Parent $env:DEPLOY_ACA_SELF
-$SubscriptionName = "az2vs"
+$Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
+$Subscription = "az2vs"
+$Location = "italynorth"
 $ResourceGroup = "rg-oyako"
-$RequestedLocation = "austriaeast"
-$FallbackContainerAppsLocation = "italynorth"
-$Location = $RequestedLocation
-$AcrLocation = "westeurope"
-$EnvironmentName = "aca-oyako-env"
-$ContainerAppName = "oyako"
+$AppName = "oyako-aca"
+$EnvironmentName = "oyako-aca-env"
 $ImageRepository = "oyako"
-$Version = "2026.6.18.300"
-$Cpu = "0.5"
-$Memory = "1.0Gi"
-$MinReplicas = "0"
-$MaxReplicas = "1"
-$TargetPort = "3000"
-$DefaultAiProvider = "ollama-cloud"
-$PlaceholderImage = "mcr.microsoft.com/k8se/quickstart:latest"
-$WebTimeoutSeconds = 600
-$KnowledgeTimeoutSeconds = 900
-$ChatTimeoutSeconds = 360
-$SkipSmokeTest = $args -contains "--skip-smoke-test"
-$script:SourceRevision = "unknown"
-$ShowHelp = ($args -contains "--help") -or ($args -contains "-h") -or ($args -contains "/?")
-$script:DeployContext = $null
+$ImageTag = "latest"
+$Scope = "oyako-aca"
+$ManagedBy = "deploy-aca"
+$BootstrapImage = "mcr.microsoft.com/k8se/quickstart:latest"
+$TargetPort = "8080"
+$Cpu = "0.25"
+$Memory = "0.5Gi"
+$SmokeTimeoutSeconds = 240
+$Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
 
-function Show-Help {
-    Write-Host "Oyako Azure Container Apps deploy script"
-    Write-Host ""
-    Write-Host "Usage:"
-    Write-Host "  deploy-aca.cmd [--skip-smoke-test]"
-    Write-Host ""
-    Write-Host "What it does:"
-    Write-Host "  - Selects Azure subscription: az2vs"
-    Write-Host "  - Uses resource group: rg-oyako"
-    Write-Host "  - Prefers Azure location: austriaeast"
-    Write-Host "  - Falls back to ACA-supported nearest location: italynorth"
-    Write-Host "  - Uses ACR in: westeurope"
-    Write-Host "  - Deploys one container app named: oyako"
-    Write-Host "  - Publishes Web UI at: https://oyako.<azure-managed-domain>/"
-    Write-Host "  - Publishes Web API at: https://oyako.<azure-managed-domain>/api"
-    Write-Host ""
-    Write-Host "Required local files:"
-    Write-Host "  - azure-cloud.env"
-    Write-Host "  - ollama-cloud.env"
+function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
+function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
+function Fail([string]$Message) { throw $Message }
+
+function Merge-ArgumentList {
+    param([string[]]$BoundArguments, [object[]]$RemainingArguments)
+    $merged = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($BoundArguments)) {
+        if ($null -ne $item) { $merged.Add([string]$item) }
+    }
+    foreach ($item in @($RemainingArguments)) {
+        if ($null -eq $item) { continue }
+        if ($item -is [Array]) {
+            foreach ($nested in $item) {
+                if ($null -ne $nested) { $merged.Add([string]$nested) }
+            }
+        }
+        else {
+            $merged.Add([string]$item)
+        }
+    }
+    return [string[]]$merged.ToArray()
 }
 
-if ($ShowHelp) {
-    Show-Help
-    exit 0
+function Resolve-Exe([string]$Name) {
+    $commands = @(Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue)
+    $command = $commands |
+        Sort-Object @{ Expression = {
+            if ($_.Source -like "*.exe") { 0 }
+            elseif ($_.Source -like "*.cmd") { 1 }
+            elseif ($_.Source -like "*.bat") { 2 }
+            else { 3 }
+        } } |
+        Select-Object -First 1
+    if (-not $command) { Fail "$Name was not found on PATH." }
+    return [string]$command.Source
 }
 
-function Write-Step([string]$Message) {
-    Write-Host ""
-    Write-Host "==> $Message" -ForegroundColor Cyan
+function Escape-CmdArguments([string]$CommandPath, [string[]]$Arguments) {
+    if ($CommandPath -notlike "*.cmd") { return $Arguments }
+    return [string[]]@($Arguments | ForEach-Object {
+        $value = [string]$_
+        if ($value -match "^[A-Za-z0-9_.:-]+\|[A-Za-z0-9_.:-]+$") { $value -replace "\|", "^|" } else { $value }
+    })
 }
 
-function Write-Ok([string]$Message) {
-    Write-Host "OK: $Message" -ForegroundColor Green
-}
-
-function Write-Warn([string]$Message) {
-    Write-Host "WARN: $Message" -ForegroundColor Yellow
-}
-
-function Fail([string]$Message) {
-    throw $Message
-}
-
-function Format-CommandForLog([string]$Exe, [string[]]$Arguments, [switch]$Sensitive) {
-    if ($Sensitive) {
-        return "$Exe <sensitive arguments redacted>"
+function Run {
+    param([string]$Exe, [string[]]$Arguments, [switch]$Sensitive, [switch]$Quiet)
+    $commandPath = Resolve-Exe $Exe
+    $invokeArguments = [string[]]@(Escape-CmdArguments $commandPath $Arguments)
+    if (-not $Quiet) {
+        $display = if ($Sensitive) { "$Exe <sensitive arguments redacted>" } else { "$Exe $($Arguments -join ' ')" }
+        Write-Host $display -ForegroundColor DarkGray
     }
 
-    $escaped = $Arguments | ForEach-Object {
-        if ($_ -match "\s") { '"' + ($_ -replace '"','\"') + '"' } else { $_ }
-    }
-
-    return "$Exe $($escaped -join ' ')"
-}
-
-function Invoke-External {
-    param(
-        [Parameter(Mandatory = $true)][string]$Exe,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [switch]$Sensitive
-    )
-
-    $commandForLog = Format-CommandForLog $Exe $Arguments -Sensitive:$Sensitive
-    Write-Host $commandForLog -ForegroundColor DarkGray
-
-    $previousNativePreference = $ErrorActionPreference
+    $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & $Exe @Arguments 2>&1
+        $output = & $commandPath @invokeArguments 2>&1
         $exitCode = $LASTEXITCODE
     }
     finally {
-        $ErrorActionPreference = $previousNativePreference
+        $ErrorActionPreference = $oldPreference
     }
 
     if ($exitCode -ne 0) {
-        if ($Sensitive) {
-            Fail "$Exe failed with exit code $exitCode. Sensitive command output was suppressed."
-        }
-
-        Fail "$Exe failed with exit code $exitCode.`n$($output -join [Environment]::NewLine)"
-    }
-
-    return $output
-}
-
-function Invoke-Capture {
-    param(
-        [Parameter(Mandatory = $true)][string]$Exe,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [switch]$AllowFailure,
-        [switch]$Sensitive
-    )
-
-    $previousNativePreference = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try {
-        $output = & $Exe @Arguments 2>&1
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $previousNativePreference
-    }
-
-    if ($exitCode -ne 0) {
-        if ($AllowFailure) {
-            return $null
-        }
-
-        if ($Sensitive) {
-            Fail "$Exe failed with exit code $exitCode. Sensitive command output was suppressed."
-        }
-
-        Fail "$Exe failed with exit code $exitCode.`n$($output -join [Environment]::NewLine)"
+        $text = if ($Sensitive) { "<sensitive output redacted>" } else { $output -join [Environment]::NewLine }
+        Fail "$Exe failed with exit code $exitCode.`n$text"
     }
 
     return ($output -join [Environment]::NewLine).Trim()
 }
 
-function Invoke-Az([string[]]$Arguments, [switch]$Sensitive) {
-    Invoke-External -Exe "az" -Arguments $Arguments -Sensitive:$Sensitive | Out-Null
+function TryRun {
+    param([string]$Exe, [string[]]$Arguments, [switch]$Sensitive)
+    $commandPath = Resolve-Exe $Exe
+    $invokeArguments = [string[]]@(Escape-CmdArguments $commandPath $Arguments)
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $commandPath @invokeArguments 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldPreference
+    }
+
+    $text = if ($Sensitive) { "<sensitive output redacted>" } else { ($output -join [Environment]::NewLine).Trim() }
+    return [pscustomobject]@{ Ok = ($exitCode -eq 0); ExitCode = $exitCode; Text = $text }
 }
 
-function Capture-Az([string[]]$Arguments, [switch]$AllowFailure, [switch]$Sensitive) {
-    return Invoke-Capture -Exe "az" -Arguments $Arguments -AllowFailure:$AllowFailure -Sensitive:$Sensitive
+function Az([string[]]$Arguments, [switch]$Sensitive, [switch]$Quiet) {
+    $Arguments = Merge-ArgumentList $Arguments $args
+    Run "az" ($Arguments + @("--only-show-errors")) -Sensitive:$Sensitive -Quiet:$Quiet | Out-Null
+}
+
+function AzText([string[]]$Arguments, [switch]$Sensitive, [switch]$Quiet) {
+    $Arguments = Merge-ArgumentList $Arguments $args
+    return Run "az" ($Arguments + @("--only-show-errors")) -Sensitive:$Sensitive -Quiet:$Quiet
+}
+
+function TryAz([string[]]$Arguments, [switch]$Sensitive) {
+    $Arguments = Merge-ArgumentList $Arguments $args
+    return TryRun "az" ($Arguments + @("--only-show-errors")) -Sensitive:$Sensitive
+}
+
+function FromJson([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+    $startObject = $Text.IndexOf("{")
+    $startArray = $Text.IndexOf("[")
+    $starts = @($startObject, $startArray) | Where-Object { $_ -ge 0 } | Sort-Object
+    if ($starts.Count -eq 0) { return $null }
+    return $Text.Substring([int]$starts[0]) | ConvertFrom-Json
+}
+
+function Normalize-Location([string]$Value) {
+    return ($Value -replace "\s+", "").ToLowerInvariant()
+}
+
+function Get-TagValue($Resource, [string]$Name) {
+    if (-not $Resource -or -not $Resource.tags) { return "" }
+    $property = $Resource.tags.PSObject.Properties[$Name]
+    if ($property) { return [string]$property.Value }
+    return ""
+}
+
+function Is-Owned($Resource) {
+    if (-not $Resource) { return $false }
+    return (Get-TagValue $Resource "app") -eq "oyako" `
+        -and (Get-TagValue $Resource "managed-by") -eq $ManagedBy `
+        -and (Get-TagValue $Resource "deployment-scope") -eq $Scope
+}
+
+function Assert-OwnedOrMissing($Resource, [string]$Name, [string]$Kind) {
+    if ($Resource -and -not (Is-Owned $Resource)) {
+        Fail "$Kind '$Name' exists but is not tagged as managed by $ManagedBy/$Scope. Refusing to modify it."
+    }
+}
+
+function Tag-Resource([string]$ResourceId) {
+    if ([string]::IsNullOrWhiteSpace($ResourceId)) {
+        Fail "Azure returned an empty resource id."
+    }
+    Az ((@("resource", "tag", "--ids", $ResourceId, "--tags") + $Tags))
 }
 
 function Read-EnvFile([string]$Path) {
-    $map = @{}
-
-    foreach ($line in Get-Content -LiteralPath $Path) {
-        $trimmed = $line.Trim()
-        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) {
-            continue
-        }
-
-        $equalsIndex = $line.IndexOf("=")
-        if ($equalsIndex -le 0) {
-            continue
-        }
-
-        $key = $line.Substring(0, $equalsIndex).Trim()
-        $value = $line.Substring($equalsIndex + 1).Trim()
-
-        if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
-            $value = $value.Substring(1, $value.Length - 2)
-        }
-
-        $map[$key] = $value
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Fail "Required env file was not found: $Path"
     }
 
-    return $map
+    $values = @{}
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        $line = $rawLine.Trim()
+        if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
+        $separator = $line.IndexOf("=")
+        if ($separator -le 0) { continue }
+        $key = $line.Substring(0, $separator).Trim()
+        $value = $line.Substring($separator + 1).Trim().Trim('"').Trim("'")
+        if ($key.Length -gt 0) { $values[$key] = $value }
+    }
+
+    return $values
 }
 
-function ConvertFrom-AzJsonOutput([string]$Text) {
-    if ([string]::IsNullOrWhiteSpace($Text)) {
-        Fail "Azure CLI returned an empty JSON payload."
-    }
-
-    $objectStart = $Text.IndexOf("{")
-    $arrayStart = $Text.IndexOf("[")
-    $starts = @($objectStart, $arrayStart) | Where-Object { $_ -ge 0 } | Sort-Object
-    if (-not $starts -or $starts.Count -eq 0) {
-        Fail "Azure CLI output did not contain JSON."
-    }
-
-    return ($Text.Substring($starts[0]) | ConvertFrom-Json)
-}
-
-function Require-Key([hashtable]$Map, [string]$Key, [string]$FileName) {
-    if (-not $Map.ContainsKey($Key) -or [string]::IsNullOrWhiteSpace([string]$Map[$Key])) {
-        Fail "Missing required key '$Key' in $FileName."
+function Require-EnvKeys([hashtable]$Map, [string[]]$Keys, [string]$FileName) {
+    foreach ($key in $Keys) {
+        if (-not $Map.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$Map[$key])) {
+            Fail "Missing or empty key '$key' in $FileName. Deployment stops before Azure mutation."
+        }
     }
 }
 
-function Get-OrDefault([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
+function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     if ($Map.ContainsKey($Key) -and -not [string]::IsNullOrWhiteSpace([string]$Map[$Key])) {
         return [string]$Map[$Key]
     }
@@ -230,237 +218,21 @@ function Get-OrDefault([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     return $DefaultValue
 }
 
-function Ensure-Tool([string]$Name) {
-    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        Fail "$Name was not found on PATH."
-    }
-}
-
-function Invoke-RobocopyCopy {
-    param(
-        [Parameter(Mandatory = $true)][string]$Source,
-        [Parameter(Mandatory = $true)][string]$Destination,
-        [string[]]$ExcludedDirectories = @(),
-        [string[]]$ExcludedFiles = @()
-    )
-
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-
-    $robocopyArgs = @(
-        $Source,
-        $Destination,
-        "/E",
-        "/NFL",
-        "/NDL",
-        "/NJH",
-        "/NJS",
-        "/NP",
-        "/R:2",
-        "/W:1"
-    )
-
-    if ($ExcludedDirectories.Count -gt 0) {
-        $robocopyArgs += "/XD"
-        $robocopyArgs += $ExcludedDirectories
-    }
-
-    if ($ExcludedFiles.Count -gt 0) {
-        $robocopyArgs += "/XF"
-        $robocopyArgs += $ExcludedFiles
-    }
-
-    Write-Host "robocopy <source> <clean-build-context> ..." -ForegroundColor DarkGray
-    $output = & robocopy @robocopyArgs 2>&1
-    $exitCode = $LASTEXITCODE
-
-    if ($exitCode -ge 8) {
-        Fail "robocopy failed with exit code $exitCode.`n$($output -join [Environment]::NewLine)"
-    }
-}
-
-function New-DeploymentContext([string]$SourceRoot) {
-    $contextRoot = Join-Path ([IO.Path]::GetTempPath()) ("oyako-aca-context-" + [Guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Force -Path $contextRoot | Out-Null
-
-    Copy-Item -LiteralPath (Join-Path $SourceRoot "Dockerfile") -Destination (Join-Path $contextRoot "Dockerfile") -Force
-    Copy-Item -LiteralPath (Join-Path $SourceRoot ".dockerignore") -Destination (Join-Path $contextRoot ".dockerignore") -Force -ErrorAction SilentlyContinue
-    Copy-Item -LiteralPath (Join-Path $SourceRoot ".azignore") -Destination (Join-Path $contextRoot ".azignore") -Force -ErrorAction SilentlyContinue
-
-    Invoke-RobocopyCopy `
-        -Source (Join-Path $SourceRoot "docker") `
-        -Destination (Join-Path $contextRoot "docker")
-
-    Invoke-RobocopyCopy `
-        -Source (Join-Path $SourceRoot "webapi-oyako") `
-        -Destination (Join-Path $contextRoot "webapi-oyako") `
-        -ExcludedDirectories @((Join-Path $SourceRoot "webapi-oyako\Data"), (Join-Path $SourceRoot "webapi-oyako\.certificates"), "bin", "obj", "webapi-oyako.Tests") `
-        -ExcludedFiles @("*.db", "*.db-shm", "*.db-wal", "*.log")
-
-    Invoke-RobocopyCopy `
-        -Source (Join-Path $SourceRoot "webapp-oyako") `
-        -Destination (Join-Path $contextRoot "webapp-oyako") `
-        -ExcludedDirectories @("node_modules", "dist", "test-results", "playwright-report") `
-        -ExcludedFiles @("*.log")
-
-    return $contextRoot
-}
-
-function Remove-DeploymentContext {
-    if ($script:DeployContext -and (Test-Path -LiteralPath $script:DeployContext)) {
-        Remove-Item -LiteralPath $script:DeployContext -Recurse -Force -ErrorAction SilentlyContinue
-        $script:DeployContext = $null
-    }
-}
-
-function Wait-AcrDataPlane([string]$LoginServer, [int]$TimeoutSeconds = 300) {
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $url = "https://$LoginServer/v2/"
-    $lastStatus = $null
-    $lastError = $null
-
-    do {
-        $challenge = ""
-        try {
-            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
-            $lastStatus = $response.StatusCode
-            $challenge = ($response.Headers["WWW-Authenticate"] -join "")
-        }
-        catch {
-            if ($_.Exception.Response) {
-                $lastStatus = [int]$_.Exception.Response.StatusCode
-                $challenge = [string]$_.Exception.Response.Headers["WWW-Authenticate"]
-            }
-            else {
-                $lastError = $_.Exception.Message
-            }
-        }
-
-        if (($lastStatus -eq 401 -and $challenge.Contains("/oauth2/token")) -or $lastStatus -eq 200) {
-            Write-Ok "ACR data-plane is ready: $LoginServer"
-            return
-        }
-
-        Start-Sleep -Seconds 10
-    } while ((Get-Date) -lt $deadline)
-
-    Fail "ACR data-plane did not become ready within $TimeoutSeconds seconds. Last status: $lastStatus. Last error: $lastError"
-}
-
-function Invoke-ImageBuildAndPush {
-    param(
-        [Parameter(Mandatory = $true)][string]$AcrName,
-        [Parameter(Mandatory = $true)][string]$ImageName,
-        [Parameter(Mandatory = $true)][string]$FullImage,
-        [Parameter(Mandatory = $true)][string]$DockerfilePath,
-        [Parameter(Mandatory = $true)][string]$ContextPath
-    )
-
-    $adminTemporarilyEnabled = $false
-    try {
-        Ensure-Tool "docker"
-        Invoke-External -Exe "docker" -Arguments @("version") | Out-Null
-        $expectedLoginServer = ($FullImage -split "/", 2)[0]
-        Wait-AcrDataPlane -LoginServer $expectedLoginServer -TimeoutSeconds 300
-
-        $loginJson = Capture-Az @("acr", "login", "--name", $AcrName, "--expose-token", "-o", "json") -AllowFailure -Sensitive
-        $dockerServer = $null
-        $dockerUser = $null
-        $dockerPassword = $null
-
-        if ($loginJson) {
-            $login = ConvertFrom-AzJsonOutput $loginJson
-            $dockerServer = [string]$login.loginServer
-            $dockerUser = "00000000-0000-0000-0000-000000000000"
-            $dockerPassword = [string]$login.accessToken
-        }
-
-        if ([string]::IsNullOrWhiteSpace($dockerServer) -or [string]::IsNullOrWhiteSpace($dockerPassword)) {
-            Write-Warn "AAD token login to ACR is unavailable. Temporarily enabling the ACR admin account for Docker push, then disabling it again."
-            Invoke-Az @("acr", "update", "--name", $AcrName, "--admin-enabled", "true", "--only-show-errors")
-            $adminTemporarilyEnabled = $true
-            $credentialJson = Capture-Az @("acr", "credential", "show", "--name", $AcrName, "-o", "json") -Sensitive
-            $credential = ConvertFrom-AzJsonOutput $credentialJson
-            $dockerServer = "$AcrName.azurecr.io"
-            $dockerUser = [string]$credential.username
-            $dockerPassword = [string]$credential.passwords[0].value
-        }
-
-        if ([string]::IsNullOrWhiteSpace($dockerServer) -or [string]::IsNullOrWhiteSpace($dockerUser) -or [string]::IsNullOrWhiteSpace($dockerPassword)) {
-            Fail "Could not resolve Docker credentials for ACR."
-        }
-
-        Write-Host "docker login <acr-login-server> --username <redacted> --password-stdin" -ForegroundColor DarkGray
-        $previousNativePreference = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        try {
-            $loginOutput = $dockerPassword | docker login $dockerServer --username $dockerUser --password-stdin 2>&1
-            $loginExitCode = $LASTEXITCODE
-        }
-        finally {
-            $ErrorActionPreference = $previousNativePreference
-        }
-
-        if ($loginExitCode -ne 0) {
-            Fail "docker login to ACR failed with exit code $loginExitCode. Output:`n$($loginOutput -join [Environment]::NewLine)"
-        }
-
-        Invoke-External -Exe "docker" -Arguments @("build", "--force-rm", "--label", "com.oyako.app=oyako", "--label", "com.oyako.role=azure-container-apps", "--label", "org.opencontainers.image.version=$Version", "--label", "org.opencontainers.image.revision=$script:SourceRevision", "-t", $FullImage, "-f", $DockerfilePath, $ContextPath)
-        Invoke-External -Exe "docker" -Arguments @("push", $FullImage)
-    }
-    finally {
-        if ($adminTemporarilyEnabled) {
-            Invoke-Az @("acr", "update", "--name", $AcrName, "--admin-enabled", "false", "--only-show-errors")
-        }
-    }
-}
-
-
-function Get-SourceRevision {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        return "unknown"
-    }
-
-    $revision = Invoke-Capture -Exe "git" -Arguments @("rev-parse", "--short=12", "HEAD") -AllowFailure
-    if ([string]::IsNullOrWhiteSpace($revision)) {
-        return "uncommitted"
-    }
-
-    return $revision.Trim()
-}
-
-function Remove-AcrImageRepositoryIfExists([string]$AcrName, [string]$Repository) {
-    $existing = Capture-Az @("acr", "repository", "show", "--name", $AcrName, "--repository", $Repository, "-o", "json") -AllowFailure
-    if ($existing) {
-        Write-Warn "Deleting previous ACR repository '$Repository' so this deploy retains only the latest image."
-        Invoke-Az @("acr", "repository", "delete", "--name", $AcrName, "--repository", $Repository, "--yes", "--only-show-errors")
-    }
-}
-
-function Assert-AcrLatestOnly([string]$AcrName, [string]$Repository) {
-    $tagsJson = Capture-Az @("acr", "repository", "show-tags", "--name", $AcrName, "--repository", $Repository, "-o", "json")
-    $tags = @($tagsJson | ConvertFrom-Json)
-    if ($tags.Count -ne 1 -or $tags[0] -ne "latest") {
-        Fail "ACR repository '$Repository' must contain only the 'latest' tag, but found: $($tags -join ', ')"
-    }
-
-    Write-Ok "ACR repository '$Repository' contains only 'latest'."
-}
-function Ensure-AzureProvider([string]$Namespace) {
-    $state = Capture-Az @("provider", "show", "--namespace", $Namespace, "--query", "registrationState", "-o", "tsv") -AllowFailure
+function Ensure-Provider([string]$Namespace) {
+    $state = AzText @("provider", "show", "--namespace", $Namespace, "--query", "registrationState", "-o", "tsv") -Quiet
     if ($state -eq "Registered") {
-        Write-Ok "$Namespace provider is registered."
+        Ok "$Namespace provider is registered."
         return
     }
 
-    Write-Warn "$Namespace provider is '$state'. Registering..."
-    Invoke-Az @("provider", "register", "--namespace", $Namespace, "--only-show-errors")
-
+    Step "Registering Azure provider $Namespace"
+    Az @("provider", "register", "--namespace", $Namespace)
     $deadline = (Get-Date).AddMinutes(10)
     do {
         Start-Sleep -Seconds 10
-        $state = Capture-Az @("provider", "show", "--namespace", $Namespace, "--query", "registrationState", "-o", "tsv") -AllowFailure
+        $state = AzText @("provider", "show", "--namespace", $Namespace, "--query", "registrationState", "-o", "tsv") -Quiet
         if ($state -eq "Registered") {
-            Write-Ok "$Namespace provider registration completed."
+            Ok "$Namespace provider registration completed."
             return
         }
     } while ((Get-Date) -lt $deadline)
@@ -468,526 +240,386 @@ function Ensure-AzureProvider([string]$Namespace) {
     Fail "$Namespace provider registration did not complete within 10 minutes."
 }
 
-function Convert-LocationDisplayNameToName([string]$LocationDisplayName) {
-    return ($LocationDisplayName -replace "\s+", "").ToLowerInvariant()
+function Wait-ResourceGone([string]$Description, [scriptblock]$Exists) {
+    $deadline = (Get-Date).AddMinutes(20)
+    do {
+        if (-not (& $Exists)) {
+            Ok "$Description removed."
+            return
+        }
+        Start-Sleep -Seconds 10
+    } while ((Get-Date) -lt $deadline)
+
+    Fail "$Description was still visible in Azure after 20 minutes."
 }
 
-function Resolve-ContainerAppsLocation([string]$PreferredLocation, [string]$FallbackLocation) {
-    $locationsJson = Capture-Az @(
-        "provider", "show",
-        "--namespace", "Microsoft.App",
-        "--query", "resourceTypes[?resourceType=='managedEnvironments'].locations[]",
-        "-o", "json"
-    )
-
-    $locations = ConvertFrom-Json -InputObject $locationsJson
-    $eligibleNames = @()
-    foreach ($providerLocation in $locations) {
-        $eligibleNames += Convert-LocationDisplayNameToName ([string]$providerLocation)
-    }
-
-    if ($eligibleNames -contains $PreferredLocation) {
-        return $PreferredLocation
-    }
-
-    if ($eligibleNames -contains $FallbackLocation) {
-        Write-Warn "Azure Container Apps does not support '$PreferredLocation' in this subscription/provider metadata. Using '$FallbackLocation' as the nearest supported fallback."
-        return $FallbackLocation
-    }
-
-    Fail "Neither preferred location '$PreferredLocation' nor fallback '$FallbackLocation' is supported by Azure Container Apps for this subscription."
-}
-
-function Remove-ContainerAppIfExists([string]$Name, [string]$Group) {
-    $existing = Capture-Az @("containerapp", "show", "--name", $Name, "--resource-group", $Group, "--query", "id", "-o", "tsv") -AllowFailure
-    if ($existing) {
-        Write-Warn "Deleting Container App '$Name' to recreate a clean deployment target."
-        Invoke-Az @("containerapp", "delete", "--name", $Name, "--resource-group", $Group, "--yes", "--only-show-errors")
-    }
-}
-
-function Remove-ContainerAppsEnvironmentIfExists([string]$Name, [string]$Group) {
-    $existing = Capture-Az @("containerapp", "env", "show", "--name", $Name, "--resource-group", $Group, "--query", "id", "-o", "tsv") -AllowFailure
-    if ($existing) {
-        Write-Warn "Deleting Container Apps environment '$Name' to recreate it in the supported location."
-        Invoke-Az @("containerapp", "env", "delete", "--name", $Name, "--resource-group", $Group, "--yes", "--only-show-errors")
-    }
-}
-
-function Wait-Http {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$Url,
-        [int]$TimeoutSeconds = 300,
-        [scriptblock]$Accept
-    )
-
+function Wait-Text([string]$Description, [scriptblock]$Resolver, [int]$TimeoutSeconds) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $lastError = $null
+    do {
+        $value = [string](& $Resolver)
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            return $value
+        }
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
 
+    Fail "Azure did not return $Description within $TimeoutSeconds seconds."
+}
+
+function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$RequiredText = "") {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $last = ""
     do {
         try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 30
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
-                if (-not $Accept -or (& $Accept $response)) {
-                    Write-Ok "$Name is reachable: $Url"
-                    return $response
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
+            $snippet = (($response.Content -replace "\s+", " ").Trim())
+            if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                if (-not [string]::IsNullOrWhiteSpace($RequiredText) -and $response.Content.IndexOf($RequiredText, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                    $last = "HTTP $($response.StatusCode): missing '$RequiredText'. $snippet"
+                }
+                else {
+                    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = $response.StatusCode; Snippet = $snippet; Ok = $true }
                 }
             }
-
-            $lastError = "Unexpected status/content from $Url."
+            else {
+                $last = "HTTP $($response.StatusCode): $snippet"
+            }
         }
         catch {
-            $lastError = $_.Exception.Message
+            $last = $_.Exception.Message
+            if ($_.Exception.Response) {
+                try { $last = "HTTP $([int]$_.Exception.Response.StatusCode): $last" } catch { }
+            }
         }
 
         Start-Sleep -Seconds 5
     } while ((Get-Date) -lt $deadline)
 
-    Fail "$Name did not become healthy within $TimeoutSeconds seconds. Last error: $lastError"
+    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
 }
 
-function Wait-Json {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$Url,
-        [int]$TimeoutSeconds = 300,
-        [Parameter(Mandatory = $true)][scriptblock]$Accept
-    )
+function Get-Acr([string]$Name) {
+    $result = TryAz @("acr", "show", "--name", $Name, "-o", "json")
+    if (-not $result.Ok) { return $null }
+    return FromJson $result.Text
+}
 
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $lastPayload = $null
-    $lastError = $null
+function Get-ContainerApp() {
+    $result = TryAz @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "-o", "json")
+    if (-not $result.Ok) { return $null }
+    return FromJson $result.Text
+}
 
-    do {
-        try {
-            $payload = Invoke-RestMethod -Uri $Url -TimeoutSec 30
-            $lastPayload = $payload | ConvertTo-Json -Depth 8
-            if (& $Accept $payload) {
-                Write-Ok "$Name is healthy: $Url"
-                return $payload
-            }
+function Get-ContainerEnvironment() {
+    $result = TryAz @("containerapp", "env", "show", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "-o", "json")
+    if (-not $result.Ok) { return $null }
+    return FromJson $result.Text
+}
+
+function Remove-OwnedContainerApp() {
+    $app = Get-ContainerApp
+    Assert-OwnedOrMissing $app $AppName "Container App"
+    if ($app) {
+        Step "Removing non-compliant Container App $AppName"
+        Az @("containerapp", "delete", "--name", $AppName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+        Wait-ResourceGone "Container App $AppName" { [bool](Get-ContainerApp) }
+    }
+}
+
+function Remove-OwnedEnvironment() {
+    $env = Get-ContainerEnvironment
+    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
+    if ($env) {
+        Step "Removing non-compliant Container Apps Environment $EnvironmentName"
+        Az @("containerapp", "env", "delete", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+        Wait-ResourceGone "Container Apps Environment $EnvironmentName" { [bool](Get-ContainerEnvironment) }
+    }
+}
+
+function Ensure-Environment() {
+    $env = Get-ContainerEnvironment
+    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
+    if ($env) {
+        $locationMatches = (Normalize-Location ([string]$env.location)) -eq $Location
+        $hasNoLogAnalytics = -not $env.properties.appLogsConfiguration.logAnalyticsConfiguration
+        if ($locationMatches -and $hasNoLogAnalytics) {
+            Ok "Using existing Container Apps Environment $EnvironmentName."
+            Tag-Resource ([string]$env.id)
+            return
         }
-        catch {
-            $lastError = $_.Exception.Message
-        }
 
-        Start-Sleep -Seconds 10
-    } while ((Get-Date) -lt $deadline)
-
-    if ($lastPayload) {
-        Fail "$Name did not satisfy health criteria within $TimeoutSeconds seconds. Last payload:`n$lastPayload"
+        Remove-OwnedContainerApp
+        Remove-OwnedEnvironment
     }
 
-    Fail "$Name did not satisfy health criteria within $TimeoutSeconds seconds. Last error: $lastError"
+    Step "Creating Container Apps Environment"
+    Az ((@(
+        "containerapp", "env", "create",
+        "--name", $EnvironmentName,
+        "--resource-group", $ResourceGroup,
+        "--location", $Location,
+        "--enable-workload-profiles", "false",
+        "--logs-destination", "none",
+        "--tags"
+    ) + $Tags))
+    $envId = Wait-Text "Container Apps Environment id" {
+        $env = Get-ContainerEnvironment
+        if ($env) { [string]$env.id } else { "" }
+    } 600
+    Tag-Resource $envId
 }
 
-function Test-ChatSmoke([string]$Url) {
-    $body = @{ message = "Oyak Dijital hangi hizmetleri sunar?" } | ConvertTo-Json
-    $deadline = (Get-Date).AddSeconds($ChatTimeoutSeconds)
-    $lastError = $null
-    Ensure-Tool "curl.exe"
-
-    do {
-        $bodyFile = Join-Path ([IO.Path]::GetTempPath()) ("oyako-chat-smoke-" + [Guid]::NewGuid().ToString("N") + ".json")
-        try {
-            Set-Content -LiteralPath $bodyFile -Value $body -Encoding UTF8 -NoNewline
-            $curlOutput = & curl.exe -sS -L --max-time 240 -H "Content-Type: application/json" --data-binary "@$bodyFile" $Url 2>&1
-            $curlExitCode = $LASTEXITCODE
-            $content = [string]($curlOutput -join [Environment]::NewLine)
-            $flat = ($content -replace "\s+", " ")
-            $hasError = $flat.Contains('"type":"error"') -or $flat.Contains("Service Unavailable") -or $flat.Contains("Beklenmedik bir hata")
-            $hasStreamData = $flat.Contains("data:") -and $flat.Contains("answer_content")
-
-            if ($curlExitCode -eq 0 -and -not $hasError -and $hasStreamData) {
-                Write-Ok "Chat smoke test passed."
-                return
-            }
-
-            $lastError = "Chat response did not contain a successful streaming answer payload. curl exit code: $curlExitCode"
-        }
-        catch {
-            $lastError = $_.Exception.Message
-        }
-        finally {
-            Remove-Item -LiteralPath $bodyFile -Force -ErrorAction SilentlyContinue
+function Ensure-ContainerAppBootstrap() {
+    $app = Get-ContainerApp
+    Assert-OwnedOrMissing $app $AppName "Container App"
+    if ($app) {
+        $environmentMatches = ([string]$app.properties.environmentId).EndsWith("/$EnvironmentName", [StringComparison]::OrdinalIgnoreCase)
+        $locationMatches = (Normalize-Location ([string]$app.location)) -eq $Location
+        if ($environmentMatches -and $locationMatches) {
+            Ok "Using existing Container App $AppName."
+            return
         }
 
-        Start-Sleep -Seconds 10
-    } while ((Get-Date) -lt $deadline)
+        Remove-OwnedContainerApp
+    }
 
-    Fail "Chat smoke test failed within $ChatTimeoutSeconds seconds. Last error: $lastError"
+    Step "Creating Container App bootstrap identity"
+    Az ((@(
+        "containerapp", "create",
+        "--name", $AppName,
+        "--resource-group", $ResourceGroup,
+        "--environment", $EnvironmentName,
+        "--image", $BootstrapImage,
+        "--ingress", "external",
+        "--target-port", "80",
+        "--revisions-mode", "single",
+        "--min-replicas", "1",
+        "--max-replicas", "1",
+        "--cpu", $Cpu,
+        "--memory", $Memory,
+        "--system-assigned",
+        "--tags"
+    ) + $Tags))
+    $appId = Wait-Text "Container App id" {
+        $app = Get-ContainerApp
+        if ($app) { [string]$app.id } else { "" }
+    } 240
+}
+
+function Ensure-AcrPull([string]$AcrId) {
+    Step "Ensuring managed identity AcrPull"
+    $principalId = Wait-Text "Container App principal id" {
+        $app = Get-ContainerApp
+        if ($app) { [string]$app.identity.principalId } else { "" }
+    } 240
+
+    $assignmentId = AzText @("role", "assignment", "list", "--assignee", $principalId, "--role", "AcrPull", "--scope", $AcrId, "--query", "[0].id", "-o", "tsv") -Quiet
+    if ([string]::IsNullOrWhiteSpace($assignmentId)) {
+        Az @("role", "assignment", "create", "--assignee", $principalId, "--role", "AcrPull", "--scope", $AcrId)
+        $assignmentId = Wait-Text "AcrPull role assignment id" {
+            AzText @("role", "assignment", "list", "--assignee", $principalId, "--role", "AcrPull", "--scope", $AcrId, "--query", "[0].id", "-o", "tsv") -Quiet
+        } 120
+        Start-Sleep -Seconds 15
+    }
+
+    Az @("containerapp", "registry", "set", "--name", $AppName, "--resource-group", $ResourceGroup, "--server", $acrLoginServer, "--identity", "system")
 }
 
 try {
     Set-Location -LiteralPath $Root
 
-    Write-Step "Checking local prerequisites"
-    Ensure-Tool "az"
-    Ensure-Tool "dotnet"
-    Ensure-Tool "npm"
-    Ensure-Tool "robocopy"
-    Ensure-Tool "docker"
+    Step "Checking local prerequisites and strict env files"
+    Resolve-Exe "az" | Out-Null
+    Resolve-Exe "docker" | Out-Null
+    Run -Exe "docker" -Arguments @("version") -Quiet | Out-Null
 
-    $azureEnvPath = Join-Path $Root "azure-cloud.env"
-    $ollamaEnvPath = Join-Path $Root "ollama-cloud.env"
-    $apiDir = Join-Path $Root "webapi-oyako"
-    $webDir = Join-Path $Root "webapp-oyako"
+    $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
+    $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
+    Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
+    Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
+    Ok "Required env files and keys are present."
 
-    foreach ($path in @($azureEnvPath, $ollamaEnvPath, (Join-Path $Root "Dockerfile"), (Join-Path $Root "docker\nginx.conf"), (Join-Path $Root "docker\entrypoint.sh"))) {
-        if (-not (Test-Path -LiteralPath $path)) {
-            Fail "Required file was not found: $path"
-        }
+    Step "Selecting Azure subscription"
+    $account = TryAz @("account", "show", "-o", "json")
+    if (-not $account.Ok) {
+        Fail "Azure CLI is not logged in. Run 'az login' manually, then retry deploy-aca.cmd."
+    }
+    Az @("account", "set", "--subscription", $Subscription)
+    $subscriptionId = AzText @("account", "show", "--query", "id", "-o", "tsv") -Quiet
+    if ([string]::IsNullOrWhiteSpace($subscriptionId)) { Fail "Azure subscription id could not be resolved after selecting '$Subscription'." }
+    Ok "Using subscription $Subscription ($subscriptionId)."
+
+    Step "Validating Azure capabilities"
+    Ensure-Provider "Microsoft.App"
+    Ensure-Provider "Microsoft.ContainerRegistry"
+    $locationName = AzText @("account", "list-locations", "--query", "[?name=='$Location'].name | [0]", "-o", "tsv") -Quiet
+    if ($locationName -ne $Location) { Fail "Azure location '$Location' is not available for this subscription." }
+    $acaLocations = AzText @("provider", "show", "--namespace", "Microsoft.App", "--query", "resourceTypes[?resourceType=='managedEnvironments'].locations[]", "-o", "json") -Quiet | ConvertFrom-Json
+    if (@($acaLocations | ForEach-Object { Normalize-Location ([string]$_) }) -notcontains $Location) {
+        Fail "Azure Container Apps managed environments are not available in '$Location'."
+    }
+    $envHelp = Run "az" @("containerapp", "env", "create", "--help") -Quiet
+    if ($envHelp -notmatch "--logs-destination" -or $envHelp -notmatch "--enable-workload-profiles") {
+        Fail "Azure CLI containerapp env create lacks required no-Log-Analytics arguments."
     }
 
-    $azureEnv = Read-EnvFile $azureEnvPath
-    $ollamaEnv = Read-EnvFile $ollamaEnvPath
-
-    foreach ($key in @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey")) {
-        Require-Key $azureEnv $key "azure-cloud.env"
+    Step "Ensuring resource group"
+    $rg = TryAz @("group", "show", "--name", $ResourceGroup, "--query", "id", "-o", "tsv")
+    if (-not $rg.Ok -or [string]::IsNullOrWhiteSpace($rg.Text)) {
+        Az @("group", "create", "--name", $ResourceGroup, "--location", $Location)
     }
 
-    Require-Key $ollamaEnv "ollama_api_key" "ollama-cloud.env"
-    Write-Ok "Required env files and secret keys are present."
-
-    Write-Step "Selecting Azure subscription"
-    $accountsJson = Capture-Az @("account", "list", "-o", "json")
-    $accounts = $accountsJson | ConvertFrom-Json
-    $account = @($accounts | Where-Object { $_.name -eq $SubscriptionName }) | Select-Object -First 1
-    if (-not $account) {
-        Fail "Azure subscription '$SubscriptionName' was not found. Run 'az login' and ensure the subscription is available."
+    Step "Ensuring deterministic ACR"
+    $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
+    $acrName = "oyakoacr$($subscriptionCompact.Substring(0, 12))"
+    $acr = Get-Acr $acrName
+    Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
+    if ($acr -and (([string]$acr.resourceGroup -ne $ResourceGroup -or (Normalize-Location ([string]$acr.location)) -ne $Location))) {
+        Step "Removing non-compliant ACR $acrName"
+        Az @("acr", "delete", "--name", $acrName, "--resource-group", $acr.resourceGroup, "--yes")
+        $acr = $null
     }
-
-    Invoke-Az @("account", "set", "--subscription", $SubscriptionName)
-    $subscriptionId = Capture-Az @("account", "show", "--query", "id", "-o", "tsv")
-    Write-Ok "Using subscription $SubscriptionName ($subscriptionId)."
-
-    Write-Step "Validating Azure resource group and location"
-    $resourceGroupId = Capture-Az @("group", "show", "--name", $ResourceGroup, "--query", "id", "-o", "tsv") -AllowFailure
-    if (-not $resourceGroupId) {
-        Fail "Resource group '$ResourceGroup' was not found in subscription '$SubscriptionName'."
+    if (-not $acr) {
+        Az ((@("acr", "create", "--name", $acrName, "--resource-group", $ResourceGroup, "--location", $Location, "--sku", "Basic", "--admin-enabled", "false", "--tags") + $Tags))
     }
-
-    $locationName = Capture-Az @("account", "list-locations", "--query", "[?name=='$RequestedLocation'].name | [0]", "-o", "tsv")
-    if ($locationName -ne $RequestedLocation) {
-        Fail "Azure location '$RequestedLocation' is not available for this subscription."
-    }
-
-    Ensure-AzureProvider "Microsoft.App"
-    Ensure-AzureProvider "Microsoft.ContainerRegistry"
-    $Location = Resolve-ContainerAppsLocation -PreferredLocation $RequestedLocation -FallbackLocation $FallbackContainerAppsLocation
-    Write-Ok "Using Azure resource location '$Location'."
-
-    $script:SourceRevision = Get-SourceRevision
-    Write-Step "Building local projects"
-    Invoke-External -Exe "dotnet" -Arguments @("build", $apiDir)
-
-    if (-not (Test-Path -LiteralPath (Join-Path $webDir "node_modules"))) {
-        Push-Location -LiteralPath $webDir
-        try {
-            Invoke-External -Exe "npm" -Arguments @("ci") | Out-Null
-        }
-        finally {
-            Pop-Location
-        }
-    }
-
-    Push-Location -LiteralPath $webDir
-    try {
-        Invoke-External -Exe "npm" -Arguments @("run", "build") | Out-Null
-    }
-    finally {
-        Pop-Location
-    }
-
-    Write-Step "Creating or validating Azure Container Registry"
-    $subscriptionKey = ($subscriptionId -replace "-", "").Substring(0, 8).ToLowerInvariant()
-    $legacyAcrName = "acaoyako$subscriptionKey" + "acr"
-    $acrName = "acaoyako$subscriptionKey" + "weacr"
-
-    if ($legacyAcrName -ne $acrName) {
-        $legacyAcrJson = Capture-Az @("acr", "show", "--name", $legacyAcrName, "-o", "json") -AllowFailure
-        if ($legacyAcrJson) {
-            $legacyAcr = $legacyAcrJson | ConvertFrom-Json
-            Write-Warn "Deleting legacy script-owned ACR '$legacyAcrName' to avoid stale data-plane name reuse."
-            Invoke-Az @("acr", "delete", "--name", $legacyAcrName, "--resource-group", $legacyAcr.resourceGroup, "--yes", "--only-show-errors")
-        }
-    }
-
-    $acrJson = Capture-Az @("acr", "show", "--name", $acrName, "-o", "json") -AllowFailure
-
-    if ($acrJson) {
-        $existingAcr = $acrJson | ConvertFrom-Json
-        if ($existingAcr.resourceGroup -ne $ResourceGroup -or (Convert-LocationDisplayNameToName ([string]$existingAcr.location)) -ne $AcrLocation) {
-            Write-Warn "Existing ACR '$acrName' is in resource group '$($existingAcr.resourceGroup)' and location '$($existingAcr.location)'. Recreating it in '$ResourceGroup/$AcrLocation'."
-            Invoke-Az @("acr", "delete", "--name", $acrName, "--resource-group", $existingAcr.resourceGroup, "--yes", "--only-show-errors")
-            $acrJson = $null
-        }
-    }
-
-    if (-not $acrJson) {
-        Invoke-Az @("acr", "create", "--name", $acrName, "--resource-group", $ResourceGroup, "--location", $AcrLocation, "--sku", "Basic", "--admin-enabled", "false", "--only-show-errors")
-    }
-
-    $acr = (Capture-Az @("acr", "show", "--name", $acrName, "-o", "json")) | ConvertFrom-Json
-    if ($acr.resourceGroup -ne $ResourceGroup) {
-        Fail "ACR '$acrName' exists in resource group '$($acr.resourceGroup)', but '$ResourceGroup' is required."
-    }
-
-    if ((Convert-LocationDisplayNameToName ([string]$acr.location)) -ne $AcrLocation) {
-        Fail "ACR '$acrName' exists in location '$($acr.location)', but '$AcrLocation' is required."
-    }
-
-    $acrId = [string]$acr.id
+    $acr = Get-Acr $acrName
+    if (-not $acr) { Fail "ACR '$acrName' was not available after create/show." }
+    if ([string]$acr.sku.name -ne "Basic") { Fail "ACR '$acrName' exists but is not Basic SKU." }
+    Tag-Resource ([string]$acr.id)
+    Az @("acr", "update", "--name", $acrName, "--admin-enabled", "false")
     $acrLoginServer = [string]$acr.loginServer
-    Write-Ok "Using ACR $acrName ($acrLoginServer)."
+    $acrId = [string]$acr.id
+    Ok "Using ACR $acrName ($acrLoginServer)."
 
-    Write-Step "Clearing previous ACR image repository"
-    Remove-AcrImageRepositoryIfExists -AcrName $acrName -Repository $ImageRepository
-
-    Write-Step "Building and pushing image with local Docker"
-    $imageTag = "latest"
-    $imageName = "$ImageRepository`:$imageTag"
-    $fullImage = "$acrLoginServer/$imageName"
-    $script:DeployContext = New-DeploymentContext $Root
-    Invoke-ImageBuildAndPush -AcrName $acrName -ImageName $imageName -FullImage $fullImage -DockerfilePath (Join-Path $script:DeployContext "Dockerfile") -ContextPath $script:DeployContext
-
-    Write-Step "Creating or validating Azure Container Apps environment"
-    $envJson = Capture-Az @("containerapp", "env", "show", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "-o", "json") -AllowFailure
-    if ($envJson) {
-        $existingEnv = $envJson | ConvertFrom-Json
-        if ((Convert-LocationDisplayNameToName ([string]$existingEnv.location)) -ne $Location) {
-            Remove-ContainerAppIfExists -Name $ContainerAppName -Group $ResourceGroup
-            Remove-ContainerAppsEnvironmentIfExists -Name $EnvironmentName -Group $ResourceGroup
-            $envJson = $null
-        }
+    Step "Building and pushing oyako:latest"
+    $env:DOCKER_BUILDKIT = "1"
+    $localImage = "$ImageRepository`:$ImageTag"
+    $remoteImage = "$acrLoginServer/$ImageRepository`:$ImageTag"
+    $repoProbe = TryAz @("acr", "repository", "show", "--name", $acrName, "--repository", $ImageRepository, "-o", "json")
+    if ($repoProbe.Ok) {
+        Az @("acr", "repository", "delete", "--name", $acrName, "--repository", $ImageRepository, "--yes")
+    }
+    Run "docker" @("build", "--quiet", "--force-rm", "-t", $localImage, ".") | Out-Null
+    Run -Exe "docker" -Arguments @("tag", $localImage, $remoteImage) -Quiet | Out-Null
+    Az @("acr", "login", "--name", $acrName)
+    Run "docker" @("push", "--quiet", $remoteImage) | Out-Null
+    $imageTags = @(AzText @("acr", "repository", "show-tags", "--name", $acrName, "--repository", $ImageRepository, "-o", "json") -Quiet | ConvertFrom-Json)
+    if ($imageTags.Count -ne 1 -or $imageTags[0] -ne $ImageTag) {
+        Fail "ACR repository '$ImageRepository' must contain only '$ImageTag', found: $($imageTags -join ', ')"
     }
 
-    if (-not $envJson) {
-        Invoke-Az @(
-            "containerapp", "env", "create",
-            "--name", $EnvironmentName,
-            "--resource-group", $ResourceGroup,
-            "--location", $Location,
-            "--logs-destination", "none",
-            "--enable-workload-profiles", "false",
-            "--only-show-errors"
-        )
-    }
+    Step "Ensuring Container Apps resources"
+    Ensure-Environment
+    Ensure-ContainerAppBootstrap
 
-    $acaEnv = (Capture-Az @("containerapp", "env", "show", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "-o", "json")) | ConvertFrom-Json
-    if ((Convert-LocationDisplayNameToName ([string]$acaEnv.location)) -ne $Location) {
-        Fail "Container Apps environment '$EnvironmentName' exists in '$($acaEnv.location)', but '$Location' is required."
-    }
-
-    Write-Ok "Using Container Apps environment $EnvironmentName."
-
-    Write-Step "Creating or validating Container App"
-    $appJson = Capture-Az @("containerapp", "show", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "-o", "json") -AllowFailure
-    if ($appJson) {
-        $app = $appJson | ConvertFrom-Json
-        $actualEnvironmentId = [string]$app.properties.managedEnvironmentId
-        if ($actualEnvironmentId -and -not $actualEnvironmentId.EndsWith("/managedEnvironments/$EnvironmentName", [StringComparison]::OrdinalIgnoreCase)) {
-            Write-Warn "Container App '$ContainerAppName' is attached to another environment. Recreating it in '$EnvironmentName'."
-            Invoke-Az @("containerapp", "delete", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--yes", "--only-show-errors")
-            $appJson = $null
-        }
-    }
-
-    if (-not $appJson) {
-        Invoke-Az @(
-            "containerapp", "create",
-            "--name", $ContainerAppName,
-            "--resource-group", $ResourceGroup,
-            "--environment", $EnvironmentName,
-            "--image", $PlaceholderImage,
-            "--ingress", "external",
-            "--target-port", "80",
-            "--revisions-mode", "single",
-            "--min-replicas", $MinReplicas,
-            "--max-replicas", $MaxReplicas,
-            "--cpu", $Cpu,
-            "--memory", $Memory,
-            "--system-assigned",
-            "--only-show-errors"
-        )
-    }
-    else {
-        Invoke-Az @("containerapp", "identity", "assign", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--system-assigned", "--only-show-errors")
-    }
-
-    $principalId = $null
-    $deadline = (Get-Date).AddMinutes(3)
-    do {
-        $principalId = Capture-Az @("containerapp", "show", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--query", "identity.principalId", "-o", "tsv") -AllowFailure
-        if ($principalId) {
-            break
-        }
-
-        Start-Sleep -Seconds 5
-    } while ((Get-Date) -lt $deadline)
-
-    if (-not $principalId) {
-        Fail "Container App system-assigned identity principalId was not created."
-    }
-
-    Write-Step "Granting Container App access to ACR"
-    $roleAssignmentId = Capture-Az @(
-        "role", "assignment", "list",
-        "--assignee", $principalId,
-        "--role", "AcrPull",
-        "--scope", $acrId,
-        "--query", "[0].id",
-        "-o", "tsv"
-    ) -AllowFailure
-
-    if (-not $roleAssignmentId) {
-        Invoke-Az @("role", "assignment", "create", "--assignee", $principalId, "--role", "AcrPull", "--scope", $acrId, "--only-show-errors")
-        Start-Sleep -Seconds 20
-    }
-
-    Invoke-Az @("containerapp", "registry", "set", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--server", $acrLoginServer, "--identity", "system", "--only-show-errors")
-
-    Write-Step "Applying Container App secrets and environment variables"
-    Invoke-Az @(
+    Step "Applying Container App secrets"
+    Az @(
         "containerapp", "secret", "set",
-        "--name", $ContainerAppName,
+        "--name", $AppName,
         "--resource-group", $ResourceGroup,
         "--secrets",
         "azure-ai-api-key=$($azureEnv["AzureAi__ApiKey"])",
-        "ollama-api-key=$($ollamaEnv["ollama_api_key"])",
-        "--only-show-errors"
+        "ollama-api-key=$($ollamaEnv["ollama_api_key"])"
     ) -Sensitive
+    Ensure-AcrPull $acrId
 
+    Step "Deploying Container App image"
+    $aiProvider = EnvValue $azureEnv "Ai__DefaultProvider" "ollama-cloud"
     $envVars = @(
-        "OYAKO_DOCKER=1",
         "ASPNETCORE_ENVIRONMENT=Production",
-        "Ai__DefaultProvider=$DefaultAiProvider",
+        "ASPNETCORE_URLS=http://+:8080",
+        "OYAKO_DOCKER=1",
+        "Storage__DataRoot=/app/data",
+        "Sqlite__ConnectionString=Data Source=/app/data/oyako.sqlite;Cache=Shared",
+        "Ai__DefaultProvider=$aiProvider",
         "Ai__DisabledProviders__0=ollama-local",
         "AzureAi__Endpoint=$($azureEnv["AzureAi__Endpoint"])",
         "AzureAi__DeploymentName=$($azureEnv["AzureAi__DeploymentName"])",
         "AzureAi__Deployments__0=$($azureEnv["AzureAi__Deployments__0"])",
         "AzureAi__ApiVersion=$($azureEnv["AzureAi__ApiVersion"])",
-        "AzureAi__TimeoutSeconds=$(Get-OrDefault $azureEnv "AzureAi__TimeoutSeconds" "180")",
-        "AzureAi__Temperature=$(Get-OrDefault $azureEnv "AzureAi__Temperature" "0.2")",
+        "AzureAi__TimeoutSeconds=$(EnvValue $azureEnv "AzureAi__TimeoutSeconds" "180")",
+        "AzureAi__Temperature=$(EnvValue $azureEnv "AzureAi__Temperature" "0.2")",
         "AzureAi__ApiKey=secretref:azure-ai-api-key",
-        "OllamaCloud__BaseUrl=https://ollama.com",
-        "OllamaCloud__Model=minimax-m3:cloud",
-        "OllamaCloud__TimeoutSeconds=180",
-        "OllamaCloud__Temperature=0.2",
+        "OllamaCloud__BaseUrl=$(EnvValue $ollamaEnv "OllamaCloud__BaseUrl" "https://ollama.com")",
+        "OllamaCloud__Model=$(EnvValue $ollamaEnv "OllamaCloud__Model" "minimax-m3:cloud")",
+        "OllamaCloud__TimeoutSeconds=$(EnvValue $ollamaEnv "OllamaCloud__TimeoutSeconds" "180")",
+        "OllamaCloud__Temperature=$(EnvValue $ollamaEnv "OllamaCloud__Temperature" "0.2")",
         "OllamaCloud__ApiKey=secretref:ollama-api-key",
-        "ollama_api_key=secretref:ollama-api-key"
+        "ollama_api_key=secretref:ollama-api-key",
+        "DEPLOYMENT_TIMESTAMP=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
     )
-
-    $updateArgs = @(
+    $revisionSuffix = "d$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+    Az ((@(
         "containerapp", "update",
-        "--name", $ContainerAppName,
+        "--name", $AppName,
         "--resource-group", $ResourceGroup,
-        "--image", $fullImage,
+        "--image", $remoteImage,
+        "--revision-suffix", $revisionSuffix,
         "--cpu", $Cpu,
         "--memory", $Memory,
-        "--min-replicas", $MinReplicas,
-        "--max-replicas", $MaxReplicas,
-        "--only-show-errors",
-        "--set-env-vars"
-    ) + $envVars
+        "--min-replicas", "1",
+        "--max-replicas", "1",
+        "--replace-env-vars"
+    ) + $envVars))
+    Az @("containerapp", "ingress", "enable", "--name", $AppName, "--resource-group", $ResourceGroup, "--type", "external", "--target-port", $TargetPort, "--transport", "auto")
 
-    Invoke-Az $updateArgs
+    $fqdn = Wait-Text "Container App FQDN" {
+        AzText @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "-o", "tsv") -Quiet
+    } 120
+    $baseUrl = "https://$fqdn"
 
-    Invoke-Az @(
-        "containerapp", "ingress", "enable",
-        "--name", $ContainerAppName,
-        "--resource-group", $ResourceGroup,
-        "--type", "external",
-        "--target-port", $TargetPort,
-        "--transport", "auto",
-        "--only-show-errors"
-    )
-
-    Write-Step "Reading public Azure Container Apps URLs"
-    $fqdn = Capture-Az @("containerapp", "show", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "-o", "tsv")
-    if (-not $fqdn) {
-        Fail "Container App FQDN was empty."
+    Step "Running smoke tests"
+    $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "Oyako"
+    $healthSmoke = Wait-Smoke "ACA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
+    $browserSmoke = Wait-Smoke "ACA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
+    $smokeResults = @($rootSmoke, $healthSmoke, $browserSmoke)
+    if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
+        $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
+        Fail "ACA smoke tests failed.`n$details"
     }
 
-    if (-not $fqdn.StartsWith("oyako.", [StringComparison]::OrdinalIgnoreCase)) {
-        Fail "Expected FQDN prefix 'oyako', but Azure returned '$fqdn'."
+    Step "Collecting final ACA resource list"
+    $resources = @()
+    foreach ($resource in @((Get-Acr $acrName), (Get-ContainerEnvironment), (Get-ContainerApp))) {
+        if ($resource) {
+            $resources += [pscustomobject]@{
+                name = $resource.name
+                type = $resource.type
+                location = $resource.location
+                id = $resource.id
+            }
+        }
     }
-
-    $webUrl = "https://$fqdn/"
-    $apiBaseUrl = "https://$fqdn/api"
-    $apiHealthUrl = "$apiBaseUrl/api-health"
-    $knowledgeHealthUrl = "$apiBaseUrl/knowledge-health"
-    $chatStreamUrl = "$apiBaseUrl/chat/stream"
-
-    Write-Step "Running public endpoint checks"
-    Wait-Http -Name "Web UI" -Url $webUrl -TimeoutSeconds $WebTimeoutSeconds -Accept { param($response) $response.Content.Contains("Oyako") } | Out-Null
-
-    $apiHealth = Wait-Json -Name "API health" -Url $apiHealthUrl -TimeoutSeconds $WebTimeoutSeconds -Accept {
-        param($payload)
-        $providers = @($payload.providerStatuses | ForEach-Object { $_.name })
-        $expectedModel = if ($DefaultAiProvider -eq "azure") { [string]$azureEnv["AzureAi__DeploymentName"] } else { "minimax-m3:cloud" }
-        return $payload.status -eq "ready" `
-            -and $payload.activeAiProvider -eq $DefaultAiProvider `
-            -and $payload.activeAiModel -eq $expectedModel `
-            -and ($providers -contains "azure") `
-            -and ($providers -contains "ollama-cloud") `
-            -and -not ($providers -contains "ollama-local")
-    }
-
-    $knowledgeHealth = Wait-Json -Name "Knowledge health" -Url $knowledgeHealthUrl -TimeoutSeconds $KnowledgeTimeoutSeconds -Accept {
-        param($payload)
-        return ([int]$payload.sourceCount -ge 1) -and ([int]$payload.pageCount -ge 1) -and (($payload.cache -eq "ok") -or ($payload.status -eq "ready") -or ($payload.status -eq "ready_with_warnings"))
-    }
-
-    Assert-AcrLatestOnly -AcrName $acrName -Repository $ImageRepository
-
-    if (-not $SkipSmokeTest) {
-        Test-ChatSmoke -Url $chatStreamUrl
-    }
-    else {
-        Write-Warn "Chat smoke test was skipped by --skip-smoke-test."
-    }
-
-    $revisionName = Capture-Az @("containerapp", "revision", "list", "--name", $ContainerAppName, "--resource-group", $ResourceGroup, "--query", "[?properties.active==``true``][0].name", "-o", "tsv") -AllowFailure
 
     Write-Host ""
-    Write-Host "Oyako Azure Container Apps deployment completed." -ForegroundColor Green
+    Write-Host "Oyako ACA deployment completed." -ForegroundColor Green
+    Write-Host "URL: $baseUrl/"
+    Write-Host "API health: $baseUrl/health"
+    Write-Host "Browser health: $baseUrl/health/browser"
+    Write-Host "Image: $remoteImage"
+    Write-Host "Selected size: $Cpu vCPU / $Memory, min=1, max=1"
+    Write-Host "Location: $Location"
     Write-Host ""
-    Write-Host "Web UI:            $webUrl"
-    Write-Host "API base:          $apiBaseUrl"
-    Write-Host "API health:        $apiHealthUrl"
-    Write-Host "Knowledge health:  $knowledgeHealthUrl"
-    Write-Host "ACR image:         $fullImage"
-    Write-Host "Resource group:    $ResourceGroup"
-    Write-Host "Location:          $Location"
-    Write-Host "ACA environment:   $EnvironmentName"
-    Write-Host "Container app:     $ContainerAppName"
-    if ($revisionName) {
-        Write-Host "Active revision:   $revisionName"
+    Write-Host "Smoke tests:"
+    foreach ($result in $smokeResults) {
+        Write-Host "  $($result.Name): HTTP $($result.StatusCode) - $($result.Snippet)"
     }
     Write-Host ""
-    Write-Host "API status:        $($apiHealth.status)"
-    Write-Host "Knowledge status:  $($knowledgeHealth.status)"
-    Write-Host "Sources/pages:     $($knowledgeHealth.sourceCount)/$($knowledgeHealth.pageCount)"
+    Write-Host "Resources:"
+    foreach ($resource in $resources) {
+        Write-Host "  $($resource.type) :: $($resource.name) :: $($resource.location)"
+    }
     Write-Host ""
-    Write-Host "Logs command:"
-    Write-Host "  az containerapp logs show --name $ContainerAppName --resource-group $ResourceGroup --follow"
-    Remove-DeploymentContext
+    Write-Host "Cost shape: ACR Basic + ACA Consumption, one always-on replica at 0.25 vCPU / 0.5Gi. No Storage Account, Log Analytics, Key Vault, or managed database was created."
     exit 0
 }
 catch {
-    Remove-DeploymentContext
     Write-Host ""
-    Write-Host "Oyako Azure Container Apps deployment failed." -ForegroundColor Red
+    Write-Host "Oyako ACA deployment failed." -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
-    Write-Host "Useful diagnostics:"
-    Write-Host "  az account show"
-    Write-Host "  az containerapp show --name $ContainerAppName --resource-group $ResourceGroup"
-    Write-Host "  az containerapp logs show --name $ContainerAppName --resource-group $ResourceGroup --tail 200"
+    Write-Host "Retry command:"
+    Write-Host "  deploy-aca.cmd"
     exit 1
 }
-
-
-
