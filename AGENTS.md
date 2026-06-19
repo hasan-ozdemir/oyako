@@ -9,7 +9,7 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - `webapi-oyako/`: ASP.NET backend, Domain/Application/Infrastructure/Presentation layers, SQLite bootstrap, crawler/scraper, AI providers, tests.
 - `webapp-oyako/`: React SPA/PWA, Turkish UI, accessibility-first dialogs, source/document management, Playwright tests.
 - `docs/`: architecture, CI/CD/CT, and UI production-readiness notes.
-- `Dockerfile`, `run-docker.cmd`, `deploy-aca.cmd`: container and Azure Container Apps automation.
+- `Dockerfile`, `run-docker.cmd`, `deploy-aca.cmd`, `deploy-awa.cmd`: single-host/container automation, Azure Container Apps, and direct Azure Web App deployment.
 - `run-app.cmd`: local backend/frontend launcher.
 
 ## Language Rules
@@ -58,11 +58,21 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - Local Docker can include local-development behavior.
 - Azure Container Apps image must include Azure and Ollama Cloud providers; Ollama Local is disabled in Azure.
 - `deploy-aca.cmd` deploys one image: `oyako:latest`.
+- `deploy-awa.cmd` deploys the locally published ASP.NET app and embedded React SPA directly to one Linux Azure Web App without Docker or ACR.
 - Azure ACR should retain only the latest `oyako:latest` image for this pre-alpha flow.
-- Azure deploy target uses subscription `az2vs`, resource group `rg-oyako`, and app prefix `aca-`.
+- Azure deploy target uses subscription `az2vs`, resource group `rg-oyako`, and location `italynorth`.
 
 ## Documentation Discipline
 
 - Update README and docs whenever public behavior, script usage, deploy flow, API behavior, or user workflow changes.
 - Keep help content Turkish and aligned with the latest UI.
 - Prefer concise, explicit comments that explain purpose and workflow decisions.
+
+## Commit Discipline
+
+- After every user prompt, if any code or file change is made, analyze all changes immediately before giving the user a summary.
+- Split changes into the smallest logical parts and record each part as a separate atomic git commit.
+- Commit messages must be contextual, developer-friendly, detailed, and descriptive.
+- Do not combine independent changes into a single commit.
+- Inspect `git diff` before committing and avoid committing temporary files, generated artifacts, local secrets, runtime data, or unrelated changes.
+- If tests, builds, or deploys were attempted, report their result in the final response and include the relevant context in commit messages when useful.
