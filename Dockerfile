@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages dotnet restore webapi-oyako/
 COPY webapi-oyako/ webapi-oyako/
 RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish webapi-oyako/webapi-oyako.csproj -c Release -o /out/api /p:UseAppHost=false
 
-FROM mcr.microsoft.com/playwright/dotnet:v1.60.0-noble AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 LABEL com.oyako.app="oyako"
 LABEL com.oyako.role="fullstack-production"
 LABEL com.oyako.version="v2026.6.18.300"
@@ -32,24 +32,25 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_HTTP_PORTS=
 ENV ASPNETCORE_HTTPS_PORTS=
 ENV OYAKO_DOCKER=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV HOME=/home/oyako
 ENV Ai__DefaultProvider=ollama-cloud
 ENV Ai__DisabledProviders__0=ollama-local
 ENV Storage__DataRoot=/app/data
 ENV Sqlite__ConnectionString="Data Source=/app/data/oyako.sqlite;Cache=Shared"
 
-RUN if ! dotnet --list-runtimes | grep -q 'Microsoft.AspNetCore.App 10\.'; then \
-      curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
-      && bash /tmp/dotnet-install.sh --install-dir /usr/share/dotnet --channel 10.0 --runtime aspnetcore \
-      && bash /tmp/dotnet-install.sh --install-dir /usr/share/dotnet --channel 10.0 --runtime dotnet \
-      && rm -f /tmp/dotnet-install.sh; \
-    fi
-
 WORKDIR /app
 COPY --from=api-build /out/api/ /app/
 COPY --from=web-build /src/webapp-oyako/dist/ /app/wwwroot/
-RUN mkdir -p /app/data \
-    && chown -R pwuser:pwuser /app
+RUN groupadd --system oyako \
+    && useradd --system --gid oyako --home-dir /home/oyako --create-home oyako \
+    && mkdir -p /app/data /ms-playwright \
+    && dotnet ./webapi-oyako.dll --install-playwright-deps \
+    && dotnet ./webapi-oyako.dll --install-playwright \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* \
+    && chown -R oyako:oyako /app /ms-playwright /home/oyako
 
-USER pwuser
+USER oyako
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "webapi-oyako.dll"]
