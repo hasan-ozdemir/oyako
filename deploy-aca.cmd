@@ -24,14 +24,13 @@ $Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
 $Subscription = "az2vs"
 $Location = "italynorth"
 $ResourceGroup = "rg-oyako"
-$DesiredAppName = "oyako"
-$DesiredEnvironmentName = "aca-oyako-env"
-$DesiredDefaultDomain = "ambitiousrock-ed5a5643.italynorth.azurecontainerapps.io"
-$ExpectedFqdn = "$DesiredAppName.$DesiredDefaultDomain"
+$DefaultTenantSlug = "oyako"
+$DefaultAppName = "oyako"
+$DefaultEnvironmentName = "oyako-aca-env"
 $PreviousAppName = "oyako-aca"
-$PreviousEnvironmentName = "oyako-aca-env"
-$AppName = $DesiredAppName
-$EnvironmentName = $DesiredEnvironmentName
+$PreviousEnvironmentName = "aca-oyako-env"
+$AppName = $DefaultAppName
+$EnvironmentName = $DefaultEnvironmentName
 $ImageRepository = "oyako"
 $ImageTag = "latest"
 $Scope = "oyako-aca"
@@ -208,6 +207,14 @@ function Read-EnvFile([string]$Path) {
     return $values
 }
 
+function Read-OptionalEnvFile([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return @{}
+    }
+
+    return Read-EnvFile $Path
+}
+
 function Require-EnvKeys([hashtable]$Map, [string[]]$Keys, [string]$FileName) {
     foreach ($key in $Keys) {
         if (-not $Map.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$Map[$key])) {
@@ -222,6 +229,18 @@ function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     }
 
     return $DefaultValue
+}
+
+function Assert-DnsLabel([string]$Value, [string]$Description, [int]$MaxLength) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        Fail "$Description cannot be empty."
+    }
+    if ($Value.Length -gt $MaxLength) {
+        Fail "$Description '$Value' is too long. Maximum length is $MaxLength characters."
+    }
+    if ($Value -cne $Value.ToLowerInvariant() -or $Value -notmatch "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$") {
+        Fail "$Description '$Value' must be a lowercase DNS label: letters, numbers, hyphen, and no leading/trailing hyphen."
+    }
 }
 
 function Ensure-Provider([string]$Namespace) {
@@ -360,11 +379,11 @@ function Remove-OwnedEnvironment() {
 }
 
 function Remove-PreviousAcaCutoverResources([string]$LegacyAcrName) {
-    if ($PreviousAppName -ne $AppName) {
+    if (-not [string]::IsNullOrWhiteSpace($PreviousAppName) -and $PreviousAppName -ne $AppName) {
         Remove-OwnedContainerAppByName $PreviousAppName "previous cutover"
     }
 
-    if ($PreviousEnvironmentName -ne $EnvironmentName) {
+    if (-not [string]::IsNullOrWhiteSpace($PreviousEnvironmentName) -and $PreviousEnvironmentName -ne $EnvironmentName) {
         Remove-OwnedEnvironmentByName $PreviousEnvironmentName "previous cutover"
     }
 
@@ -382,72 +401,34 @@ function Remove-PreviousAcaCutoverResources([string]$LegacyAcrName) {
     }
 }
 
-function Get-AllContainerEnvironments() {
-    $text = AzText @("containerapp", "env", "list", "-o", "json") -Quiet
-    $items = @(FromJson $text)
-    return @($items)
-}
-
 function Get-EnvironmentDefaultDomain($Environment) {
     if (-not $Environment -or -not $Environment.properties) { return "" }
     return [string]$Environment.properties.defaultDomain
 }
 
-function Assert-DesiredEnvironment($Environment) {
-    if (-not $Environment) { Fail "Container Apps Environment was not returned by Azure." }
-    $name = [string]$Environment.name
-    $resourceGroup = [string]$Environment.resourceGroup
-    $locationMatches = (Normalize-Location ([string]$Environment.location)) -eq $Location
-    $domain = Get-EnvironmentDefaultDomain $Environment
-
-    if ($name -ne $DesiredEnvironmentName) {
-        Fail "Desired ACA domain '$DesiredDefaultDomain' is active on environment '$name', but this script manages '$DesiredEnvironmentName'. Refusing to use or modify it."
-    }
-    if ($resourceGroup -ne $ResourceGroup) {
-        Fail "Desired ACA domain '$DesiredDefaultDomain' is active in resource group '$resourceGroup', but '$ResourceGroup' is required."
-    }
-    if (-not $locationMatches) {
-        Fail "Desired ACA domain '$DesiredDefaultDomain' is active in location '$($Environment.location)', but '$Location' is required."
-    }
-    if ($domain -ne $DesiredDefaultDomain) {
-        Fail "Container Apps Environment '$name' returned domain '$domain'; expected '$DesiredDefaultDomain'."
-    }
-    Assert-OwnedOrMissing $Environment $name "Container Apps Environment"
-}
-
-function Ensure-DesiredManagedDomain() {
-    Step "Checking deterministic ACA managed domain"
-    $matches = @(Get-AllContainerEnvironments | Where-Object { (Get-EnvironmentDefaultDomain $_) -eq $DesiredDefaultDomain })
-    if ($matches.Count -gt 1) {
-        $names = ($matches | ForEach-Object { "$($_.resourceGroup)/$($_.name)" }) -join ", "
-        Fail "Desired ACA domain '$DesiredDefaultDomain' is active on multiple environments: $names"
-    }
-
-    if ($matches.Count -eq 1) {
-        Assert-DesiredEnvironment $matches[0]
-        $script:EnvironmentName = [string]$matches[0].name
-        Ok "Desired ACA managed domain is already active on $ResourceGroup/$EnvironmentName."
-        return
-    }
-
-    $existing = Get-ContainerEnvironmentByName $DesiredEnvironmentName
-    Assert-OwnedOrMissing $existing $DesiredEnvironmentName "Container Apps Environment"
-    if ($existing) {
-        $existingDomain = Get-EnvironmentDefaultDomain $existing
-        $locationMatches = (Normalize-Location ([string]$existing.location)) -eq $Location
-        if ($locationMatches -and $existingDomain -eq $DesiredDefaultDomain) {
-            Ok "Desired ACA managed domain is already active on $ResourceGroup/$DesiredEnvironmentName."
+function Ensure-Environment() {
+    $env = Get-ContainerEnvironment
+    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
+    if ($env) {
+        $locationMatches = (Normalize-Location ([string]$env.location)) -eq $Location
+        if ($locationMatches) {
+            $domain = Get-EnvironmentDefaultDomain $env
+            if ([string]::IsNullOrWhiteSpace($domain)) {
+                Fail "Container Apps Environment '$EnvironmentName' has no default domain yet."
+            }
+            Ok "Using existing Container Apps Environment $EnvironmentName."
+            Tag-Resource ([string]$env.id)
             return
         }
 
-        Remove-OwnedContainerAppByName $DesiredAppName "stale target"
-        Remove-OwnedEnvironmentByName $DesiredEnvironmentName "stale target"
+        Remove-OwnedContainerAppByName $AppName "non-compliant"
+        Remove-OwnedEnvironmentByName $EnvironmentName "non-compliant"
     }
 
-    Step "Trying one ACA environment recreate for managed domain reclaim"
+    Step "Creating Container Apps Environment $EnvironmentName"
     Az ((@(
         "containerapp", "env", "create",
-        "--name", $DesiredEnvironmentName,
+        "--name", $EnvironmentName,
         "--resource-group", $ResourceGroup,
         "--location", $Location,
         "--enable-workload-profiles", "false",
@@ -456,41 +437,16 @@ function Ensure-DesiredManagedDomain() {
     ) + $Tags))
 
     $envId = Wait-Text "Container Apps Environment id" {
-        $env = Get-ContainerEnvironmentByName $DesiredEnvironmentName
-        if ($env) { [string]$env.id } else { "" }
+        $created = Get-ContainerEnvironment
+        if ($created) { [string]$created.id } else { "" }
     } 600
     Tag-Resource $envId
 
-    $actualDomain = Wait-Text "Container Apps Environment default domain" {
-        $env = Get-ContainerEnvironmentByName $DesiredEnvironmentName
-        if ($env) { Get-EnvironmentDefaultDomain $env } else { "" }
+    $domain = Wait-Text "Container Apps Environment default domain" {
+        $created = Get-ContainerEnvironment
+        if ($created) { Get-EnvironmentDefaultDomain $created } else { "" }
     } 600
-
-    if ($actualDomain -ne $DesiredDefaultDomain) {
-        Remove-OwnedEnvironmentByName $DesiredEnvironmentName "failed managed-domain reclaim"
-        $supportResourceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.App/managedEnvironments/$DesiredEnvironmentName"
-        Fail "Azure assigned ACA default domain '$actualDomain', not '$DesiredDefaultDomain'. The deleted environment name cannot be reclaimed by this script. Open a Microsoft Support case for '$supportResourceId', reference old suffix '$DesiredDefaultDomain', old app '$DesiredAppName', and deletion correlation id 'af9fe413-26fd-448a-a7db-91d0640ea5af'."
-    }
-
-    Ok "Reclaimed desired ACA managed domain $DesiredDefaultDomain."
-}
-
-function Ensure-Environment() {
-    $env = Get-ContainerEnvironment
-    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
-    if ($env) {
-        $locationMatches = (Normalize-Location ([string]$env.location)) -eq $Location
-        $domainMatches = (Get-EnvironmentDefaultDomain $env) -eq $DesiredDefaultDomain
-        if ($locationMatches -and $domainMatches) {
-            Ok "Using existing Container Apps Environment $EnvironmentName."
-            Tag-Resource ([string]$env.id)
-            return
-        }
-
-        Fail "Container Apps Environment '$EnvironmentName' is not the reclaimed target. Location='$($env.location)', domain='$(Get-EnvironmentDefaultDomain $env)'."
-    }
-
-    Fail "Container Apps Environment '$EnvironmentName' is missing after managed-domain reclaim."
+    Ok "Created Container Apps Environment $EnvironmentName with default domain $domain."
 }
 
 function Ensure-ContainerAppBootstrap() {
@@ -559,9 +515,21 @@ try {
 
     $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
     $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
+    $oyakoEnv = Read-OptionalEnvFile (Join-Path $Root "oyako.env")
     Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
     Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
+    $tenantSlug = EnvValue $oyakoEnv "OYAKO_TENANT_SLUG" $DefaultTenantSlug
+    $AppName = EnvValue $oyakoEnv "OYAKO_ACA_APP_NAME" $tenantSlug
+    $EnvironmentName = EnvValue $oyakoEnv "OYAKO_ACA_ENV_NAME" $DefaultEnvironmentName
+    $PreviousAppName = EnvValue $oyakoEnv "OYAKO_ACA_PREVIOUS_APP_NAME" $PreviousAppName
+    $PreviousEnvironmentName = EnvValue $oyakoEnv "OYAKO_ACA_PREVIOUS_ENV_NAME" $PreviousEnvironmentName
+    Assert-DnsLabel $tenantSlug "OYAKO_TENANT_SLUG" 32
+    Assert-DnsLabel $AppName "OYAKO_ACA_APP_NAME" 32
+    Assert-DnsLabel $EnvironmentName "OYAKO_ACA_ENV_NAME" 32
+    if (-not [string]::IsNullOrWhiteSpace($PreviousAppName)) { Assert-DnsLabel $PreviousAppName "OYAKO_ACA_PREVIOUS_APP_NAME" 32 }
+    if (-not [string]::IsNullOrWhiteSpace($PreviousEnvironmentName)) { Assert-DnsLabel $PreviousEnvironmentName "OYAKO_ACA_PREVIOUS_ENV_NAME" 32 }
     Ok "Required env files and keys are present."
+    Ok "ACA naming: app '$AppName', environment '$EnvironmentName'."
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
@@ -593,8 +561,6 @@ try {
     if (-not $rg.Ok -or [string]::IsNullOrWhiteSpace($rg.Text)) {
         Az @("group", "create", "--name", $ResourceGroup, "--location", $Location)
     }
-
-    Ensure-DesiredManagedDomain
 
     Step "Ensuring deterministic ACR"
     $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
@@ -638,6 +604,11 @@ try {
 
     Step "Ensuring Container Apps resources"
     Ensure-Environment
+    $environmentDefaultDomain = Wait-Text "Container Apps Environment default domain" {
+        $env = Get-ContainerEnvironment
+        if ($env) { Get-EnvironmentDefaultDomain $env } else { "" }
+    } 120
+    $expectedFqdn = "$AppName.$environmentDefaultDomain"
     Ensure-ContainerAppBootstrap
 
     Step "Applying Container App secrets"
@@ -694,8 +665,8 @@ try {
     $fqdn = Wait-Text "Container App FQDN" {
         AzText @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "-o", "tsv") -Quiet
     } 120
-    if ($fqdn -ne $ExpectedFqdn) {
-        Fail "Azure returned Container App FQDN '$fqdn'; expected '$ExpectedFqdn'."
+    if ($fqdn -ne $expectedFqdn) {
+        Fail "Azure returned Container App FQDN '$fqdn'; expected '$expectedFqdn'."
     }
     $baseUrl = "https://$fqdn"
     $apiBaseUrl = "$baseUrl/api"

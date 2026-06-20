@@ -24,7 +24,11 @@ $Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
 $Subscription = "az2vs"
 $Location = "italynorth"
 $ResourceGroup = "rg-oyako"
+$DefaultTenantSlug = "oyako"
+$DefaultWebAppName = "oyako"
 $PlanName = "oyako-awa-plan"
+$WebAppName = $DefaultWebAppName
+$PreviousWebAppName = ""
 $Scope = "oyako-awa"
 $ManagedBy = "deploy-awa"
 $Sku = "B1"
@@ -198,6 +202,14 @@ function Read-EnvFile([string]$Path) {
     return $values
 }
 
+function Read-OptionalEnvFile([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return @{}
+    }
+
+    return Read-EnvFile $Path
+}
+
 function Require-EnvKeys([hashtable]$Map, [string[]]$Keys, [string]$FileName) {
     foreach ($key in $Keys) {
         if (-not $Map.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$Map[$key])) {
@@ -212,6 +224,18 @@ function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     }
 
     return $DefaultValue
+}
+
+function Assert-DnsLabel([string]$Value, [string]$Description, [int]$MaxLength) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        Fail "$Description cannot be empty."
+    }
+    if ($Value.Length -gt $MaxLength) {
+        Fail "$Description '$Value' is too long. Maximum length is $MaxLength characters."
+    }
+    if ($Value -cne $Value.ToLowerInvariant() -or $Value -notmatch "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$") {
+        Fail "$Description '$Value' must be a lowercase DNS label: letters, numbers, hyphen, and no leading/trailing hyphen."
+    }
 }
 
 function Ensure-Provider([string]$Namespace) {
@@ -299,17 +323,50 @@ function Get-WebApp([string]$Name) {
     return @(FromJson $result.Text | Select-Object -First 1)[0]
 }
 
+function Get-ArmAccessToken() {
+    $token = AzText @("account", "get-access-token", "--resource", "https://management.azure.com/", "--query", "accessToken", "-o", "tsv") -Quiet
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        Fail "Azure ARM access token could not be resolved for Web App name availability check."
+    }
+    return $token
+}
+
+function Assert-WebAppNameAvailableOrOwned([string]$Name, $ExistingSite) {
+    if ($ExistingSite) {
+        Assert-OwnedOrMissing $ExistingSite $Name "Web App"
+        return
+    }
+
+    $token = Get-ArmAccessToken
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/providers/Microsoft.Web/checknameavailability?api-version=2026-03-15"
+    $body = @{ name = $Name; type = "Site" } | ConvertTo-Json -Compress
+    try {
+        $result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body $body -TimeoutSec 60
+    }
+    catch {
+        Fail "Web App name availability check failed for '$Name': $($_.Exception.Message)"
+    }
+
+    if (-not [bool]$result.nameAvailable) {
+        $reason = [string]$result.reason
+        $message = [string]$result.message
+        Fail "Web App name '$Name' is not available. Reason='$reason'. Message='$message'."
+    }
+
+    Ok "Web App name '$Name' is globally available."
+}
+
 function Get-Plan() {
     $result = TryAz @("appservice", "plan", "show", "--name", $PlanName, "--resource-group", $ResourceGroup, "-o", "json")
     if (-not $result.Ok) { return $null }
     return FromJson $result.Text
 }
 
-function Remove-OwnedWebApp([string]$Name) {
+function Remove-OwnedWebApp([string]$Name, [string]$Description = "non-compliant") {
     $site = Get-WebApp $Name
     Assert-OwnedOrMissing $site $Name "Web App"
     if ($site) {
-        Step "Removing non-compliant Web App $Name"
+        Step "Removing $Description Web App $Name"
         Az @("webapp", "delete", "--name", $site.name, "--resource-group", $site.resourceGroup)
         Wait-ResourceGone "Web App $Name" { [bool](Get-WebApp $Name) }
     }
@@ -413,16 +470,17 @@ try {
 
     $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
     $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
+    $oyakoEnv = Read-OptionalEnvFile (Join-Path $Root "oyako.env")
     Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
     Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
+    $tenantSlug = EnvValue $oyakoEnv "OYAKO_TENANT_SLUG" $DefaultTenantSlug
+    $WebAppName = EnvValue $oyakoEnv "OYAKO_AWA_WEBAPP_NAME" $tenantSlug
+    $PlanName = EnvValue $oyakoEnv "OYAKO_AWA_PLAN_NAME" $PlanName
+    Assert-DnsLabel $tenantSlug "OYAKO_TENANT_SLUG" 60
+    Assert-DnsLabel $WebAppName "OYAKO_AWA_WEBAPP_NAME" 60
+    Assert-DnsLabel $PlanName "OYAKO_AWA_PLAN_NAME" 40
     Ok "Required env files and keys are present."
-
-    $buildRoot = Join-Path $Root ".oyako-deploy\awa"
-    $publishDir = Join-Path $buildRoot "publish"
-    $zipPath = Join-Path $buildRoot "oyako-awa.zip"
-    Remove-PathInsideRoot $buildRoot
-    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-    Build-PublishPackage $publishDir $zipPath
+    Ok "AWA naming: web app '$WebAppName', plan '$PlanName'."
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
@@ -433,7 +491,8 @@ try {
     $subscriptionId = AzText @("account", "show", "--query", "id", "-o", "tsv") -Quiet
     if ([string]::IsNullOrWhiteSpace($subscriptionId)) { Fail "Azure subscription id could not be resolved after selecting '$Subscription'." }
     $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
-    $WebAppName = "oyako-awa-$($subscriptionCompact.Substring(0, 8))"
+    $PreviousWebAppName = EnvValue $oyakoEnv "OYAKO_AWA_PREVIOUS_WEBAPP_NAME" "oyako-awa-$($subscriptionCompact.Substring(0, 8))"
+    if (-not [string]::IsNullOrWhiteSpace($PreviousWebAppName)) { Assert-DnsLabel $PreviousWebAppName "OYAKO_AWA_PREVIOUS_WEBAPP_NAME" 60 }
     Ok "Using subscription $Subscription ($subscriptionId)."
 
     Step "Validating Azure capabilities"
@@ -444,6 +503,10 @@ try {
     if (@($appServiceLocations -split "\r?\n" | Where-Object { $_ } | ForEach-Object { Normalize-Location ([string]$_) }) -notcontains $Location) {
         Fail "Linux App Service $Sku is not available in '$Location'."
     }
+    $deployHelp = Run "az" @("webapp", "deploy", "--help") -Quiet
+    if ($deployHelp -notmatch "--track-status" -or $deployHelp -notmatch "--timeout") {
+        Fail "Azure CLI webapp deploy lacks required --track-status/--timeout arguments."
+    }
 
     Step "Ensuring resource group"
     $rg = TryAz @("group", "show", "--name", $ResourceGroup, "--query", "id", "-o", "tsv")
@@ -451,12 +514,21 @@ try {
         Az @("group", "create", "--name", $ResourceGroup, "--location", $Location)
     }
 
-    Step "Ensuring App Service resources"
+    Step "Checking Web App name and managed resources"
     $site = Get-WebApp $WebAppName
     Assert-OwnedOrMissing $site $WebAppName "Web App"
+    Assert-WebAppNameAvailableOrOwned $WebAppName $site
     $plan = Get-Plan
     Assert-OwnedOrMissing $plan $PlanName "App Service Plan"
 
+    $buildRoot = Join-Path $Root ".oyako-deploy\awa"
+    $publishDir = Join-Path $buildRoot "publish"
+    $zipPath = Join-Path $buildRoot "oyako-awa.zip"
+    Remove-PathInsideRoot $buildRoot
+    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+    Build-PublishPackage $publishDir $zipPath
+
+    Step "Ensuring App Service resources"
     if ($site -and (([string]$site.resourceGroup -ne $ResourceGroup) -or ((Normalize-Location ([string]$site.location)) -ne $Location))) {
         Remove-OwnedWebApp $WebAppName
         $site = $null
@@ -518,17 +590,24 @@ try {
     Az ((@("webapp", "config", "appsettings", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--settings") + $appSettings)) -Sensitive
 
     Step "Deploying ZIP package"
-    Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "true")
+    Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "true", "--track-status", "false", "--timeout", "600000")
 
     $baseUrl = "https://$WebAppName.azurewebsites.net"
+    $apiBaseUrl = "$baseUrl/api"
     Step "Running Web App smoke tests"
     $rootSmoke = Wait-Smoke "AWA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "Oyako"
     $healthSmoke = Wait-Smoke "AWA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
+    $apiHealthSmoke = Wait-Smoke "AWA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds '"status":"ready"'
     $browserSmoke = Wait-Smoke "AWA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
-    $smokeResults = @($rootSmoke, $healthSmoke, $browserSmoke)
+    $smokeResults = @($rootSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "AWA smoke tests failed.`n$details"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($PreviousWebAppName) -and $PreviousWebAppName -ne $WebAppName) {
+        Step "Removing previous AWA cutover resources"
+        Remove-OwnedWebApp $PreviousWebAppName "previous cutover"
     }
 
     Step "Collecting final App Service resource list"
@@ -549,7 +628,9 @@ try {
     Write-Host ""
     Write-Host "Oyako App Service deployment completed." -ForegroundColor Green
     Write-Host "URL: $baseUrl/"
+    Write-Host "API base: $apiBaseUrl"
     Write-Host "API health: $baseUrl/health"
+    Write-Host "API routed health: $apiBaseUrl/health"
     Write-Host "Browser health: $baseUrl/health/browser"
     Write-Host "SKU: $finalSku"
     Write-Host "Always On: $alwaysOn"
