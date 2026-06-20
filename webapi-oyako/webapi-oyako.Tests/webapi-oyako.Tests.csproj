@@ -9,6 +9,7 @@
     <AssemblyVersion>2026.6.18.300</AssemblyVersion>
     <FileVersion>2026.6.18.300</FileVersion>
     <InformationalVersion>v2026.6.18.300</InformationalVersion>
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
 
   <ItemGroup>
