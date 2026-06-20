@@ -17,6 +17,10 @@
 
 For cutover from the previous pre-alpha ACA script, `deploy-aca.cmd` also removes only these exact legacy Oyako resource names when they exist in `rg-oyako`: `oyako`, `aca-oyako-env`, and `acaoyako<subscription8>weacr`. It does not remove unrelated untagged resources or shared AI resources.
 
+The current ACA cutover target is the deterministic managed URL `https://oyako.ambitiousrock-ed5a5643.italynorth.azurecontainerapps.io/`, with API traffic under `/api`. Azure generates the `ambitiousrock-ed5a5643` environment suffix; the script cannot directly choose it. Before Docker build, ACR push, or Container App mutation, `deploy-aca.cmd` looks for an active `aca-oyako-env` environment with that exact suffix. If it is missing, the script performs one controlled recreate attempt for `aca-oyako-env` in `italynorth` with `--logs-destination none`. If Azure assigns any other suffix, the script deletes only that newly created failed-reclaim environment, leaves the existing bluepond deployment untouched, and fails fast with the old suffix, resource id, and deletion correlation id for Microsoft Support.
+
+Historical Azure Resource Graph evidence showed the deleted `oyako` app revisions previously used `ambitiousrock-ed5a5643.italynorth.azurecontainerapps.io`, and Activity Log showed the old `aca-oyako-env` deletion correlation id `af9fe413-26fd-448a-a7db-91d0640ea5af` on `2026-06-19T20:16:27Z`. Azure CLI 2.84.0 and the Microsoft.App provider metadata did not expose a supported restore, recover, undelete, or reclaim operation for deleted Container Apps managed environments.
+
 `deploy-awa.cmd` manages only resources tagged with `app=oyako`, `managed-by=deploy-awa`, and `deployment-scope=oyako-awa`:
 
 - Linux Basic App Service Plan
