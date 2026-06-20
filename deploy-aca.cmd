@@ -24,8 +24,14 @@ $Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
 $Subscription = "az2vs"
 $Location = "italynorth"
 $ResourceGroup = "rg-oyako"
-$AppName = "oyako-aca"
-$EnvironmentName = "oyako-aca-env"
+$DesiredAppName = "oyako"
+$DesiredEnvironmentName = "aca-oyako-env"
+$DesiredDefaultDomain = "ambitiousrock-ed5a5643.italynorth.azurecontainerapps.io"
+$ExpectedFqdn = "$DesiredAppName.$DesiredDefaultDomain"
+$PreviousAppName = "oyako-aca"
+$PreviousEnvironmentName = "oyako-aca-env"
+$AppName = $DesiredAppName
+$EnvironmentName = $DesiredEnvironmentName
 $ImageRepository = "oyako"
 $ImageTag = "latest"
 $Scope = "oyako-aca"
@@ -305,70 +311,61 @@ function Get-Acr([string]$Name) {
     return FromJson $result.Text
 }
 
-function Get-ContainerApp() {
-    $result = TryAz @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "-o", "json")
-    if (-not $result.Ok) { return $null }
-    return FromJson $result.Text
-}
-
-function Get-ContainerEnvironment() {
-    $result = TryAz @("containerapp", "env", "show", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "-o", "json")
-    if (-not $result.Ok) { return $null }
-    return FromJson $result.Text
-}
-
-function Get-LegacyContainerApp([string]$Name) {
+function Get-ContainerAppByName([string]$Name) {
     $result = TryAz @("containerapp", "show", "--name", $Name, "--resource-group", $ResourceGroup, "-o", "json")
     if (-not $result.Ok) { return $null }
     return FromJson $result.Text
 }
 
-function Get-LegacyContainerEnvironment([string]$Name) {
+function Get-ContainerEnvironmentByName([string]$Name) {
     $result = TryAz @("containerapp", "env", "show", "--name", $Name, "--resource-group", $ResourceGroup, "-o", "json")
     if (-not $result.Ok) { return $null }
     return FromJson $result.Text
 }
 
-function Remove-OwnedContainerApp() {
-    $app = Get-ContainerApp
-    Assert-OwnedOrMissing $app $AppName "Container App"
+function Get-ContainerApp() {
+    return Get-ContainerAppByName $AppName
+}
+
+function Get-ContainerEnvironment() {
+    return Get-ContainerEnvironmentByName $EnvironmentName
+}
+
+function Remove-OwnedContainerAppByName([string]$Name, [string]$Description) {
+    $app = Get-ContainerAppByName $Name
+    Assert-OwnedOrMissing $app $Name "Container App"
     if ($app) {
-        Step "Removing non-compliant Container App $AppName"
-        Az @("containerapp", "delete", "--name", $AppName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
-        Wait-ResourceGone "Container App $AppName" { [bool](Get-ContainerApp) }
+        Step "Removing $Description Container App $Name"
+        Az @("containerapp", "delete", "--name", $Name, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+        Wait-ResourceGone "Container App $Name" { [bool](Get-ContainerAppByName $Name) }
     }
+}
+
+function Remove-OwnedEnvironmentByName([string]$Name, [string]$Description) {
+    $env = Get-ContainerEnvironmentByName $Name
+    Assert-OwnedOrMissing $env $Name "Container Apps Environment"
+    if ($env) {
+        Step "Removing $Description Container Apps Environment $Name"
+        Az @("containerapp", "env", "delete", "--name", $Name, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+        Wait-ResourceGone "Container Apps Environment $Name" { [bool](Get-ContainerEnvironmentByName $Name) }
+    }
+}
+
+function Remove-OwnedContainerApp() {
+    Remove-OwnedContainerAppByName $AppName "non-compliant"
 }
 
 function Remove-OwnedEnvironment() {
-    $env = Get-ContainerEnvironment
-    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
-    if ($env) {
-        Step "Removing non-compliant Container Apps Environment $EnvironmentName"
-        Az @("containerapp", "env", "delete", "--name", $EnvironmentName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
-        Wait-ResourceGone "Container Apps Environment $EnvironmentName" { [bool](Get-ContainerEnvironment) }
-    }
+    Remove-OwnedEnvironmentByName $EnvironmentName "non-compliant"
 }
 
-function Remove-LegacyAcaCutoverResources([string]$LegacyAcrName) {
-    $legacyAppName = "oyako"
-    $legacyEnvironmentName = "aca-oyako-env"
-
-    if ($legacyAppName -ne $AppName) {
-        $legacyApp = Get-LegacyContainerApp $legacyAppName
-        if ($legacyApp) {
-            Step "Removing legacy Container App $legacyAppName"
-            Az @("containerapp", "delete", "--name", $legacyAppName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
-            Wait-ResourceGone "Legacy Container App $legacyAppName" { [bool](Get-LegacyContainerApp $legacyAppName) }
-        }
+function Remove-PreviousAcaCutoverResources([string]$LegacyAcrName) {
+    if ($PreviousAppName -ne $AppName) {
+        Remove-OwnedContainerAppByName $PreviousAppName "previous cutover"
     }
 
-    if ($legacyEnvironmentName -ne $EnvironmentName) {
-        $legacyEnvironment = Get-LegacyContainerEnvironment $legacyEnvironmentName
-        if ($legacyEnvironment) {
-            Step "Removing legacy Container Apps Environment $legacyEnvironmentName"
-            Az @("containerapp", "env", "delete", "--name", $legacyEnvironmentName, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
-            Wait-ResourceGone "Legacy Container Apps Environment $legacyEnvironmentName" { [bool](Get-LegacyContainerEnvironment $legacyEnvironmentName) }
-        }
+    if ($PreviousEnvironmentName -ne $EnvironmentName) {
+        Remove-OwnedEnvironmentByName $PreviousEnvironmentName "previous cutover"
     }
 
     if ($LegacyAcrName -ne $acrName) {
@@ -385,37 +382,115 @@ function Remove-LegacyAcaCutoverResources([string]$LegacyAcrName) {
     }
 }
 
-function Ensure-Environment() {
-    $env = Get-ContainerEnvironment
-    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
-    if ($env) {
-        $locationMatches = (Normalize-Location ([string]$env.location)) -eq $Location
-        $hasNoLogAnalytics = -not $env.properties.appLogsConfiguration.logAnalyticsConfiguration
-        if ($locationMatches -and $hasNoLogAnalytics) {
-            Ok "Using existing Container Apps Environment $EnvironmentName."
-            Tag-Resource ([string]$env.id)
+function Get-AllContainerEnvironments() {
+    $text = AzText @("containerapp", "env", "list", "-o", "json") -Quiet
+    $items = @(FromJson $text)
+    return @($items)
+}
+
+function Get-EnvironmentDefaultDomain($Environment) {
+    if (-not $Environment -or -not $Environment.properties) { return "" }
+    return [string]$Environment.properties.defaultDomain
+}
+
+function Assert-DesiredEnvironment($Environment) {
+    if (-not $Environment) { Fail "Container Apps Environment was not returned by Azure." }
+    $name = [string]$Environment.name
+    $resourceGroup = [string]$Environment.resourceGroup
+    $locationMatches = (Normalize-Location ([string]$Environment.location)) -eq $Location
+    $domain = Get-EnvironmentDefaultDomain $Environment
+
+    if ($name -ne $DesiredEnvironmentName) {
+        Fail "Desired ACA domain '$DesiredDefaultDomain' is active on environment '$name', but this script manages '$DesiredEnvironmentName'. Refusing to use or modify it."
+    }
+    if ($resourceGroup -ne $ResourceGroup) {
+        Fail "Desired ACA domain '$DesiredDefaultDomain' is active in resource group '$resourceGroup', but '$ResourceGroup' is required."
+    }
+    if (-not $locationMatches) {
+        Fail "Desired ACA domain '$DesiredDefaultDomain' is active in location '$($Environment.location)', but '$Location' is required."
+    }
+    if ($domain -ne $DesiredDefaultDomain) {
+        Fail "Container Apps Environment '$name' returned domain '$domain'; expected '$DesiredDefaultDomain'."
+    }
+    Assert-OwnedOrMissing $Environment $name "Container Apps Environment"
+}
+
+function Ensure-DesiredManagedDomain() {
+    Step "Checking deterministic ACA managed domain"
+    $matches = @(Get-AllContainerEnvironments | Where-Object { (Get-EnvironmentDefaultDomain $_) -eq $DesiredDefaultDomain })
+    if ($matches.Count -gt 1) {
+        $names = ($matches | ForEach-Object { "$($_.resourceGroup)/$($_.name)" }) -join ", "
+        Fail "Desired ACA domain '$DesiredDefaultDomain' is active on multiple environments: $names"
+    }
+
+    if ($matches.Count -eq 1) {
+        Assert-DesiredEnvironment $matches[0]
+        $script:EnvironmentName = [string]$matches[0].name
+        Ok "Desired ACA managed domain is already active on $ResourceGroup/$EnvironmentName."
+        return
+    }
+
+    $existing = Get-ContainerEnvironmentByName $DesiredEnvironmentName
+    Assert-OwnedOrMissing $existing $DesiredEnvironmentName "Container Apps Environment"
+    if ($existing) {
+        $existingDomain = Get-EnvironmentDefaultDomain $existing
+        $locationMatches = (Normalize-Location ([string]$existing.location)) -eq $Location
+        if ($locationMatches -and $existingDomain -eq $DesiredDefaultDomain) {
+            Ok "Desired ACA managed domain is already active on $ResourceGroup/$DesiredEnvironmentName."
             return
         }
 
-        Remove-OwnedContainerApp
-        Remove-OwnedEnvironment
+        Remove-OwnedContainerAppByName $DesiredAppName "stale target"
+        Remove-OwnedEnvironmentByName $DesiredEnvironmentName "stale target"
     }
 
-    Step "Creating Container Apps Environment"
+    Step "Trying one ACA environment recreate for managed domain reclaim"
     Az ((@(
         "containerapp", "env", "create",
-        "--name", $EnvironmentName,
+        "--name", $DesiredEnvironmentName,
         "--resource-group", $ResourceGroup,
         "--location", $Location,
         "--enable-workload-profiles", "false",
         "--logs-destination", "none",
         "--tags"
     ) + $Tags))
+
     $envId = Wait-Text "Container Apps Environment id" {
-        $env = Get-ContainerEnvironment
+        $env = Get-ContainerEnvironmentByName $DesiredEnvironmentName
         if ($env) { [string]$env.id } else { "" }
     } 600
     Tag-Resource $envId
+
+    $actualDomain = Wait-Text "Container Apps Environment default domain" {
+        $env = Get-ContainerEnvironmentByName $DesiredEnvironmentName
+        if ($env) { Get-EnvironmentDefaultDomain $env } else { "" }
+    } 600
+
+    if ($actualDomain -ne $DesiredDefaultDomain) {
+        Remove-OwnedEnvironmentByName $DesiredEnvironmentName "failed managed-domain reclaim"
+        $supportResourceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.App/managedEnvironments/$DesiredEnvironmentName"
+        Fail "Azure assigned ACA default domain '$actualDomain', not '$DesiredDefaultDomain'. The deleted environment name cannot be reclaimed by this script. Open a Microsoft Support case for '$supportResourceId', reference old suffix '$DesiredDefaultDomain', old app '$DesiredAppName', and deletion correlation id 'af9fe413-26fd-448a-a7db-91d0640ea5af'."
+    }
+
+    Ok "Reclaimed desired ACA managed domain $DesiredDefaultDomain."
+}
+
+function Ensure-Environment() {
+    $env = Get-ContainerEnvironment
+    Assert-OwnedOrMissing $env $EnvironmentName "Container Apps Environment"
+    if ($env) {
+        $locationMatches = (Normalize-Location ([string]$env.location)) -eq $Location
+        $domainMatches = (Get-EnvironmentDefaultDomain $env) -eq $DesiredDefaultDomain
+        if ($locationMatches -and $domainMatches) {
+            Ok "Using existing Container Apps Environment $EnvironmentName."
+            Tag-Resource ([string]$env.id)
+            return
+        }
+
+        Fail "Container Apps Environment '$EnvironmentName' is not the reclaimed target. Location='$($env.location)', domain='$(Get-EnvironmentDefaultDomain $env)'."
+    }
+
+    Fail "Container Apps Environment '$EnvironmentName' is missing after managed-domain reclaim."
 }
 
 function Ensure-ContainerAppBootstrap() {
@@ -495,6 +570,7 @@ try {
     }
     Az @("account", "set", "--subscription", $Subscription)
     $subscriptionId = AzText @("account", "show", "--query", "id", "-o", "tsv") -Quiet
+    $script:SubscriptionId = $subscriptionId
     if ([string]::IsNullOrWhiteSpace($subscriptionId)) { Fail "Azure subscription id could not be resolved after selecting '$Subscription'." }
     Ok "Using subscription $Subscription ($subscriptionId)."
 
@@ -518,11 +594,12 @@ try {
         Az @("group", "create", "--name", $ResourceGroup, "--location", $Location)
     }
 
+    Ensure-DesiredManagedDomain
+
     Step "Ensuring deterministic ACR"
     $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
     $acrName = "oyakoacr$($subscriptionCompact.Substring(0, 12))"
     $legacyAcrName = "acaoyako$($subscriptionCompact.Substring(0, 8))weacr"
-    Remove-LegacyAcaCutoverResources $legacyAcrName
     $acr = Get-Acr $acrName
     Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
     if ($acr -and (([string]$acr.resourceGroup -ne $ResourceGroup -or (Normalize-Location ([string]$acr.location)) -ne $Location))) {
@@ -617,17 +694,25 @@ try {
     $fqdn = Wait-Text "Container App FQDN" {
         AzText @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "-o", "tsv") -Quiet
     } 120
+    if ($fqdn -ne $ExpectedFqdn) {
+        Fail "Azure returned Container App FQDN '$fqdn'; expected '$ExpectedFqdn'."
+    }
     $baseUrl = "https://$fqdn"
+    $apiBaseUrl = "$baseUrl/api"
 
     Step "Running smoke tests"
     $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "Oyako"
     $healthSmoke = Wait-Smoke "ACA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
+    $apiHealthSmoke = Wait-Smoke "ACA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds '"status":"ready"'
     $browserSmoke = Wait-Smoke "ACA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
-    $smokeResults = @($rootSmoke, $healthSmoke, $browserSmoke)
+    $smokeResults = @($rootSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "ACA smoke tests failed.`n$details"
     }
+
+    Step "Removing previous ACA cutover resources"
+    Remove-PreviousAcaCutoverResources $legacyAcrName
 
     Step "Collecting final ACA resource list"
     $resources = @()
@@ -645,7 +730,9 @@ try {
     Write-Host ""
     Write-Host "Oyako ACA deployment completed." -ForegroundColor Green
     Write-Host "URL: $baseUrl/"
+    Write-Host "API base: $apiBaseUrl"
     Write-Host "API health: $baseUrl/health"
+    Write-Host "API routed health: $apiBaseUrl/health"
     Write-Host "Browser health: $baseUrl/health/browser"
     Write-Host "Image: $remoteImage"
     Write-Host "Selected size: $Cpu vCPU / $Memory, min=1, max=1"
