@@ -53,6 +53,44 @@ public class UrlNormalizerTests
     }
 
     [Fact]
+    public void TryNormalize_AcceptsSubdomainsInsideSourceDomain()
+    {
+        var baseUri = new Uri("https://www.generic-tenant.org.tr");
+        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
+        var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "https://bagis.generic-tenant.org.tr/tr/", out var normalized);
+
+        Assert.True(ok);
+        Assert.Equal("https://bagis.generic-tenant.org.tr/tr", normalized);
+    }
+
+    [Fact]
+    public void TryNormalize_RejectsDifferentDomainsEvenWhenTheyAreLinkedBySource()
+    {
+        var baseUri = new Uri("https://www.generic-tenant.org.tr");
+        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
+        var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "https://kanver.org", out var normalized);
+
+        Assert.False(ok);
+        Assert.Equal(string.Empty, normalized);
+    }
+
+    [Fact]
+    public void TryNormalize_CanDisableSubdomainDiscovery()
+    {
+        var baseUri = new Uri("https://www.generic-tenant.org.tr");
+        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
+        var ok = UrlNormalizer.TryNormalize(
+            baseUri,
+            sourceUri,
+            "https://bagis.generic-tenant.org.tr/tr/",
+            out var normalized,
+            includeSubdomains: false);
+
+        Assert.False(ok);
+        Assert.Equal(string.Empty, normalized);
+    }
+
+    [Fact]
     // Executes this component behavior as part of the Oyako application flow.
     public void TryNormalize_RejectsStaticAssetsByDefault()
     {

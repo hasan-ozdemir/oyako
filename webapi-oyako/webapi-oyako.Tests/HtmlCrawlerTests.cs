@@ -89,6 +89,8 @@ public class HtmlCrawlerTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/sitemap-icinden-gelen");
         // Verifies the expected behavior for this test scenario.
+        Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/engellenen");
+        // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain(result.Errors, error => error.Contains("HTTP 418", StringComparison.Ordinal));
         // Verifies the expected behavior for this test scenario.
         Assert.Contains(result.Warnings, warning => warning.Contains("HTTP 418", StringComparison.Ordinal));
@@ -183,8 +185,59 @@ public class HtmlCrawlerTests
         var result = await crawler.CrawlAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.True(result.IsSuccessful, string.Join(" | ", result.Errors.Concat(result.Warnings)));
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://retry.example/busy" && page.StatusCode == "http503");
+        Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl == "https://retry.example/busy");
+        Assert.Contains(result.Warnings, warning => warning.Contains("HTTP 503", StringComparison.Ordinal));
         Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://retry.example/available" && page.StatusCode == "ok");
+    }
+
+    [Fact]
+    public async Task CrawlAsync_CrawlsSourceOwnedSubdomainsButRejectsOtherDomains()
+    {
+        var responses = new Dictionary<string, Func<HttpResponseMessage>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["https://generic-tenant.org.tr/"] = () => Html("""
+                <html><body>
+                    generic-tenant ana sayfa metni.
+                    <a href="https://bagis.generic-tenant.org.tr/tr">Bagis</a>
+                    <a href="https://kanver.org">Dis domain</a>
+                </body></html>
+                """),
+            ["https://generic-tenant.org.tr/sitemap.xml"] = () => new HttpResponseMessage(HttpStatusCode.NotFound),
+            ["https://bagis.generic-tenant.org.tr/tr"] = () => Html("<html><body>generic-tenant bagis yontemleri online sms banka 168 ptt sube.</body></html>")
+        };
+        using var httpClient = new HttpClient(new StubHttpHandler(responses));
+        var crawler = new HtmlCrawler(
+            httpClient,
+            Options.Create(new CrawlerOptions
+            {
+                SeedUrl = "https://www.generic-tenant.org.tr",
+                MaxPagesToCrawl = 10,
+                MaxDepth = 2,
+                MinimumTextLengthToStore = 5,
+                MinimumRequestDelayMilliseconds = 0,
+                MaximumRequestDelayMilliseconds = 0
+            }),
+            new RenderedTextExtractor(),
+            new KnowledgeTextCleaner(),
+            new KnowledgeFileParser(),
+            new StubWebPageRepository());
+
+        var result = await crawler.CrawlSourceAsync(
+            new KnowledgeSource
+            {
+                Id = 1,
+                Name = "generic-tenant",
+                SourceType = KnowledgeSourceTypes.WebSite,
+                Address = "https://www.generic-tenant.org.tr",
+                Protocol = "https",
+                IsEnabled = true
+            },
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccessful, string.Join(" | ", result.Errors.Concat(result.Warnings)));
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://generic-tenant.org.tr/");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://bagis.generic-tenant.org.tr/tr");
+        Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl.Contains("kanver.org", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -140,8 +140,12 @@ public static class DependencyInjection
         // Registers or maps application behavior into the runtime pipeline.
         services.AddTransient<IAiProviderClient>(serviceProvider => serviceProvider.GetRequiredService<AzureAiClient>());
 
-        // Registers or maps application behavior into the runtime pipeline.
-        services.AddHostedService<LocalKnowledgeRebuildHostedService>();
+        var crawlerOptions = configuration.GetSection(CrawlerOptions.SectionName).Get<CrawlerOptions>() ?? new CrawlerOptions();
+        if (crawlerOptions.LocalKnowledgeRebuildOnStartupEnabled)
+        {
+            // Registers or maps application behavior into the runtime pipeline.
+            services.AddHostedService<LocalKnowledgeRebuildHostedService>();
+        }
         // Registers or maps application behavior into the runtime pipeline.
         services.AddHostedService<KnowledgeSourceRefreshHostedService>();
 

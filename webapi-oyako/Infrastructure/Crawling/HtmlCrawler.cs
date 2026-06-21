@@ -313,11 +313,6 @@ public sealed class HtmlCrawler : IWebCrawler
                     var statusCode = (int)response.StatusCode;
                     var issue = $"[{current.Url}] HTTP {statusCode} {response.ReasonPhrase}";
                     warnings.Add(issue);
-                    if (!current.IsUtilityDocument)
-                    {
-                        discoveredPages[current.Url] = BuildStatusDocument(source, current.Url, GuessTitle(current.Url), $"http{statusCode}", $"http{statusCode}", issue, statusCode);
-                    }
-
                     continue;
                 }
 
@@ -365,6 +360,16 @@ public sealed class HtmlCrawler : IWebCrawler
             }
         }
 
+        if (queue.Count > 0 && discoveredPages.Count >= _options.MaxPagesToCrawl)
+        {
+            warnings.Add($"[{source.Address}] Crawl belge limiti doldu: MaxPagesToCrawl={_options.MaxPagesToCrawl}.");
+        }
+
+        if (queue.Count > 0 && visitedUrls.Count >= maxFetchAttempts)
+        {
+            warnings.Add($"[{source.Address}] Crawl fetch deneme limiti doldu: MaxFetchAttempts={maxFetchAttempts}.");
+        }
+
         return new CrawlerResult(
             discoveredPages.Values.Any(page => page.StatusCode == "ok"),
             discoveredPages.Values.ToList(),
@@ -379,7 +384,14 @@ public sealed class HtmlCrawler : IWebCrawler
                 return;
             }
 
-            if (!UrlNormalizer.TryNormalize(siteRootUri, sourceUri, rawUrl, out var normalized, isUtilityDocument))
+            if (!UrlNormalizer.TryNormalize(
+                    siteRootUri,
+                    sourceUri,
+                    rawUrl,
+                    out var normalized,
+                    isUtilityDocument,
+                    _options.DomainOnlyCrawling,
+                    _options.IncludeSubdomains))
             {
                 return;
             }

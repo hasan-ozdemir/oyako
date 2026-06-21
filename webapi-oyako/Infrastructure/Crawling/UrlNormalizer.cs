@@ -23,7 +23,9 @@ public static class UrlNormalizer
         Uri sourceUri,
         string rawLink,
         out string normalizedUrl,
-        bool allowNonHtmlDocument = false)
+        bool allowNonHtmlDocument = false,
+        bool domainOnlyCrawling = true,
+        bool includeSubdomains = true)
     {
         normalizedUrl = string.Empty;
 
@@ -59,7 +61,7 @@ public static class UrlNormalizer
         }
 
         // Guards the following branch so the workflow handles this condition deliberately.
-        if (!AreEquivalentHosts(combined.Host, siteRootUri.Host))
+        if (domainOnlyCrawling && !IsAllowedHost(combined.Host, siteRootUri.Host, includeSubdomains))
         {
             // Returns the computed result to the caller and completes this branch of the workflow.
             return false;
@@ -89,7 +91,8 @@ public static class UrlNormalizer
             return false;
         }
 
-        normalizedUrl = $"{combined.Scheme.ToLowerInvariant()}://{RemoveWww(siteRootUri.Host).ToLowerInvariant()}{path}";
+        var normalizedHost = BuildNormalizedHost(combined.Host, siteRootUri.Host);
+        normalizedUrl = $"{combined.Scheme.ToLowerInvariant()}://{normalizedHost}{path}";
         normalizedUrl = Uri.UnescapeDataString(normalizedUrl);
         // Returns the computed result to the caller and completes this branch of the workflow.
         return true;
@@ -110,10 +113,28 @@ public static class UrlNormalizer
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static bool AreEquivalentHosts(string currentHost, string siteHost)
+    private static bool IsAllowedHost(string currentHost, string siteHost, bool includeSubdomains)
     {
-        // Returns the computed result to the caller and completes this branch of the workflow.
-        return string.Equals(RemoveWww(currentHost), RemoveWww(siteHost), StringComparison.OrdinalIgnoreCase);
+        var current = RemoveWww(currentHost);
+        var root = RemoveWww(siteHost);
+        if (string.Equals(current, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return includeSubdomains && current.EndsWith($".{root}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildNormalizedHost(string currentHost, string siteHost)
+    {
+        var current = RemoveWww(currentHost).ToLowerInvariant();
+        var root = RemoveWww(siteHost).ToLowerInvariant();
+        if (string.Equals(current, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return root;
+        }
+
+        return current;
     }
 
     // Executes this component behavior as part of the Oyako application flow.
