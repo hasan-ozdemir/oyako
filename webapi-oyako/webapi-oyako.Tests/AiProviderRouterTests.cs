@@ -1,7 +1,9 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/webapi-oyako.Tests/AiProviderRouterTests.cs for maintainers.
 using webapi_oyako.Domain.Models;
 using webapi_oyako.Domain.Services;
+using webapi_oyako.Infrastructure.Configuration;
 using webapi_oyako.Infrastructure.Llm;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
@@ -63,6 +65,23 @@ public class AiProviderRouterTests
         }
 
         Assert.Equal(new[] { "azure stream" }, tokens);
+    }
+
+    [Fact]
+    public async Task CompleteChatAsync_WhenAzureFallbackIsMissing_DoesNotFallbackToLocalProvider()
+    {
+        var ollamaLocal = new StubProvider("ollama-local", "local answer");
+        var ollamaCloud = new FailingProvider("ollama-cloud", "HTTP 429 quota");
+        var router = new AiProviderRouter(
+            new IAiProviderClient[] { ollamaCloud, ollamaLocal },
+            new StubAiConfigurationService("ollama-cloud", "azure-model", "local-model", "cloud-model"),
+            Options.Create(new AiOptions { FallbackProviders = ["azure"] }));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => router.CompleteChatAsync("system", "user", CancellationToken.None));
+
+        Assert.Contains("ollama-cloud", error.Message);
+        Assert.Equal(1, ollamaCloud.CompleteCalls);
+        Assert.Equal(0, ollamaLocal.CompleteCalls);
     }
 
     [Fact]

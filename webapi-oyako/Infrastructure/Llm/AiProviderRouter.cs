@@ -13,16 +13,18 @@ public sealed class AiProviderRouter : IAiChatClient, IAiProviderCatalog
     private readonly IReadOnlyDictionary<string, IAiProviderClient> _providers;
     // Stores state or a dependency required by the surrounding component.
     private readonly IAiConfigurationService _aiConfigurationService;
+    private readonly IReadOnlyList<string> _fallbackProviders;
 
     // Creates a new instance and captures the dependencies needed by this component.
     public AiProviderRouter(IEnumerable<IAiProviderClient> providers, IAiConfigurationService aiConfigurationService, IOptions<AiOptions>? aiOptions = null)
     {
-        var disabledProviders = aiOptions?.Value.DisabledProviders ?? [];
-        var disabledSet = new HashSet<string>(disabledProviders.Where(provider => !string.IsNullOrWhiteSpace(provider)), StringComparer.OrdinalIgnoreCase);
+        var options = aiOptions?.Value ?? new AiOptions();
+        var disabledSet = BuildProviderSet(options.DisabledProviders);
         _providers = providers
             .Where(provider => !disabledSet.Contains(provider.ProviderName))
             .ToDictionary(provider => provider.ProviderName, StringComparer.OrdinalIgnoreCase);
         _aiConfigurationService = aiConfigurationService;
+        _fallbackProviders = BuildFallbackProviderList(options.FallbackProviders, disabledSet);
     }
 
     // Stores state or a dependency required by the surrounding component.
@@ -169,11 +171,13 @@ public sealed class AiProviderRouter : IAiChatClient, IAiProviderCatalog
         }
 
         var candidates = new List<IAiProviderClient> { activeProvider };
-        foreach (var provider in _providers.Values
-            .Where(provider => !string.Equals(provider.ProviderName, ActiveProvider, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(GetFallbackPriority)
-            .ThenBy(provider => provider.ProviderName, StringComparer.OrdinalIgnoreCase))
+        foreach (var providerName in _fallbackProviders.Where(provider => !string.Equals(provider, ActiveProvider, StringComparison.OrdinalIgnoreCase)))
         {
+            if (!_providers.TryGetValue(providerName, out var provider))
+            {
+                continue;
+            }
+
             try
             {
                 if (await provider.IsAvailableAsync(cancellationToken))
@@ -190,15 +194,36 @@ public sealed class AiProviderRouter : IAiChatClient, IAiProviderCatalog
         return candidates;
     }
 
-    // Gives cloud-capable providers priority over the local daemon for fallback in hosted and local runs.
-    private static int GetFallbackPriority(IAiProviderClient provider)
+    private static HashSet<string> BuildProviderSet(IEnumerable<string> providers)
     {
-        return provider.ProviderName.ToLowerInvariant() switch
+        return new HashSet<string>(
+            providers.Select(NormalizeProviderName).OfType<string>(),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> BuildFallbackProviderList(IEnumerable<string> providers, IReadOnlySet<string> disabledProviders)
+    {
+        return providers
+            .Select(NormalizeProviderName)
+            .OfType<string>()
+            .Where(provider => !disabledProviders.Contains(provider))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string? NormalizeProviderName(string? provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
         {
-            "azure" => 0,
-            "ollama-cloud" => 1,
-            "ollama-local" => 2,
-            _ => 10
+            return null;
+        }
+
+        return provider.Trim().ToLowerInvariant() switch
+        {
+            "azure" or "azure-cloud" => "azure",
+            "ollama-cloud" => "ollama-cloud",
+            "ollama-local" => "ollama-local",
+            _ => null
         };
     }
 

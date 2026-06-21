@@ -143,7 +143,8 @@ public sealed class AiConfigurationService : IAiConfigurationService
     private static string? NormalizeProvider(string provider)
     {
         // Guards the following branch so the workflow handles this condition deliberately.
-        if (provider.Equals("azure", StringComparison.OrdinalIgnoreCase))
+        if (provider.Equals("azure", StringComparison.OrdinalIgnoreCase)
+            || provider.Equals("azure-cloud", StringComparison.OrdinalIgnoreCase))
         {
             // Returns the computed result to the caller and completes this branch of the workflow.
             return "azure";
