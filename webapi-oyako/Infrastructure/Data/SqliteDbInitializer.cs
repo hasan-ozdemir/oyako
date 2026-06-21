@@ -19,19 +19,22 @@ public sealed class SqliteDbInitializer
     private readonly AzureAiOptions _azureAiOptions;
     private readonly OllamaLocalOptions _ollamaLocalOptions;
     private readonly OllamaCloudOptions _ollamaCloudOptions;
+    private readonly TenantOptions _tenantOptions;
 
     public SqliteDbInitializer(
         IOptions<SqliteOptions> options,
         IOptions<AiOptions> aiOptions,
         IOptions<AzureAiOptions> azureAiOptions,
         IOptions<OllamaLocalOptions> ollamaLocalOptions,
-        IOptions<OllamaCloudOptions> ollamaCloudOptions)
+        IOptions<OllamaCloudOptions> ollamaCloudOptions,
+        IOptions<TenantOptions> tenantOptions)
     {
         _options = options.Value;
         _aiOptions = aiOptions.Value;
         _azureAiOptions = azureAiOptions.Value;
         _ollamaLocalOptions = ollamaLocalOptions.Value;
         _ollamaCloudOptions = ollamaCloudOptions.Value;
+        _tenantOptions = tenantOptions.Value;
     }
 
     // Creates or resets the database to the final schema expected by this version.
@@ -339,11 +342,16 @@ public sealed class SqliteDbInitializer
     private async Task SeedRequiredDataAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow.ToString("O");
-        var tenantGuid = Guid.NewGuid().ToString("D");
+        var tenantGuid = string.IsNullOrWhiteSpace(_tenantOptions.Id) ? Guid.NewGuid().ToString("D") : _tenantOptions.Id.Trim();
+        var tenantDisplayName = string.IsNullOrWhiteSpace(_tenantOptions.DisplayName) ? "Oyako Tenant" : _tenantOptions.DisplayName.Trim();
+        var knowledgeBankName = string.IsNullOrWhiteSpace(_tenantOptions.UiWebKnowledgeBankHeaderTitle)
+            ? $"{tenantDisplayName} Bilgi Bankası"
+            : _tenantOptions.UiWebKnowledgeBankHeaderTitle.Trim();
         var knowledgeGuid = Guid.NewGuid().ToString("D");
         var webSourceGuid = Guid.NewGuid().ToString("D");
-        var sourceUri = new Uri("https://oyakdijital.com.tr");
+        var sourceUri = new Uri(string.IsNullOrWhiteSpace(_tenantOptions.WebUrl) ? "https://www.oyakdijital.com.tr" : _tenantOptions.WebUrl.Trim());
         var sourceAddress = $"{sourceUri.Scheme}://{sourceUri.Host}";
+        var sourceDescription = $"{tenantDisplayName} web sitesi ana bilgi kaynağı.";
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
@@ -356,12 +364,12 @@ public sealed class SqliteDbInitializer
             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at_utc = excluded.updated_at_utc;
 
             INSERT INTO tenant_metadata (id, tenant_guid, name, created_at_utc, updated_at_utc)
-            SELECT 1, $tenantGuid, 'Oyako Tenant', $now, $now
-            WHERE NOT EXISTS (SELECT 1 FROM tenant_metadata WHERE id = 1);
+            VALUES (1, $tenantGuid, $tenantName, $now, $now)
+            ON CONFLICT(id) DO UPDATE SET tenant_guid = excluded.tenant_guid, name = excluded.name, updated_at_utc = excluded.updated_at_utc;
 
             INSERT INTO knowledge_bank_metadata (id, tenant_guid, tenant_knowledge_guid, name, version, created_at_utc, updated_at_utc)
-            SELECT 1, (SELECT tenant_guid FROM tenant_metadata WHERE id = 1), $knowledgeGuid, 'Oyako Bilgi Bankası', $appVersion, $now, $now
-            WHERE NOT EXISTS (SELECT 1 FROM knowledge_bank_metadata WHERE id = 1);
+            VALUES (1, (SELECT tenant_guid FROM tenant_metadata WHERE id = 1), $knowledgeGuid, $knowledgeBankName, $appVersion, $now, $now)
+            ON CONFLICT(id) DO UPDATE SET tenant_guid = excluded.tenant_guid, name = excluded.name, version = excluded.version, updated_at_utc = excluded.updated_at_utc;
 
             INSERT INTO knowledge_sources (
                 tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_type, name, description, address, protocol,
@@ -370,8 +378,8 @@ public sealed class SqliteDbInitializer
                    (SELECT tenant_knowledge_guid FROM knowledge_bank_metadata WHERE id = 1),
                    $webSourceGuid,
                    $sourceType,
-                   'Oyak Dijital',
-                   'Oyak Dijital web sitesi ana bilgi kaynağı.',
+                   $sourceName,
+                   $sourceDescription,
                    $address,
                    $protocol,
                    1,
@@ -400,9 +408,13 @@ public sealed class SqliteDbInitializer
         command.Parameters.AddWithValue("$schemaVersion", SchemaVersion);
         command.Parameters.AddWithValue("$appVersion", AppVersion);
         command.Parameters.AddWithValue("$tenantGuid", tenantGuid);
+        command.Parameters.AddWithValue("$tenantName", tenantDisplayName);
+        command.Parameters.AddWithValue("$knowledgeBankName", knowledgeBankName);
         command.Parameters.AddWithValue("$knowledgeGuid", knowledgeGuid);
         command.Parameters.AddWithValue("$webSourceGuid", webSourceGuid);
         command.Parameters.AddWithValue("$sourceType", KnowledgeSourceTypes.WebSite);
+        command.Parameters.AddWithValue("$sourceName", tenantDisplayName);
+        command.Parameters.AddWithValue("$sourceDescription", sourceDescription);
         command.Parameters.AddWithValue("$address", sourceAddress);
         command.Parameters.AddWithValue("$protocol", sourceUri.Scheme);
         command.Parameters.AddWithValue("$activeProvider", string.IsNullOrWhiteSpace(_aiOptions.DefaultProvider) ? "ollama-cloud" : _aiOptions.DefaultProvider);

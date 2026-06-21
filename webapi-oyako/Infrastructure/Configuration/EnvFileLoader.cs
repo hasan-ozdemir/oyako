@@ -1,17 +1,52 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/Infrastructure/Configuration/EnvFileLoader.cs for maintainers.
+using System.Text;
+using System.Text.RegularExpressions;
+
 namespace webapi_oyako.Infrastructure.Configuration;
 
 // Implements the EnvFileLoader component and its responsibilities in the Oyako codebase.
 public static class EnvFileLoader
 {
-    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["domain_only_crawling"] = "Crawler__DomainOnlyCrawling",
-        ["web_document_max_count"] = "Crawler__MaxPagesToCrawl",
-        ["web_document_max_depth"] = "Crawler__MaxDepth",
-        ["ai_default_provider"] = "Ai__DefaultProvider",
-        ["ai_fallback_provider"] = "Ai__FallbackProviders__0"
+        ["domain_only_crawling"] = ["Crawler__DomainOnlyCrawling"],
+        ["web_document_max_count"] = ["Crawler__MaxPagesToCrawl"],
+        ["web_document_max_depth"] = ["Crawler__MaxDepth"],
+        ["ai_default_provider"] = ["Ai__DefaultProvider"],
+        ["ai_fallback_provider"] = ["Ai__FallbackProviders__0"],
+        ["primary_ai_provider"] = ["Ai__DefaultProvider"],
+        ["secondary_ai_provider"] = ["Ai__FallbackProviders__0"],
+        ["ai_provider_ollama_cloud_model"] = ["OllamaCloud__Model", "OllamaCloud__Models__0"],
+        ["ai_provider_azure_cloud_model"] = ["AzureAi__DeploymentName", "AzureAi__Deployments__0"],
+        ["tenant_id"] = ["Tenant__Id"],
+        ["tenant_order_number"] = ["Tenant__OrderNumber"],
+        ["tenant_name"] = ["Tenant__Name"],
+        ["tenant_display_name"] = ["Tenant__DisplayName"],
+        ["tenant_azure_domain_name"] = ["Tenant__AzureDomainName"],
+        ["tenant_custom_domain_name"] = ["Tenant__CustomDomainName"],
+        ["tenant_web_url"] = ["Tenant__WebUrl"],
+        ["tenant_admin_email"] = ["Tenant__AdminEmail"],
+        ["tenant_feedback_email"] = ["Tenant__FeedbackEmail"],
+        ["ui_web_brand_name"] = ["Tenant__UiWebBrandName"],
+        ["ui_web_assistant_name"] = ["Tenant__UiWebAssistantName"],
+        ["ui_web_title"] = ["Tenant__UiWebTitle"],
+        ["ui_web_header_title"] = ["Tenant__UiWebHeaderTitle"],
+        ["ui_web_brand_logo_url"] = ["Tenant__UiWebBrandLogoUrl"],
+        ["ui_web_assistant_welcome_message"] = ["Tenant__UiWebAssistantWelcomeMessage"],
+        ["ui_web_assistant_header_title"] = ["Tenant__UiWebAssistantHeaderTitle"],
+        ["ui_web_more_menu_brand_link"] = ["Tenant__UiWebMoreMenuBrandLink"],
+        ["ui_web_more_menu_feedback_link"] = ["Tenant__UiWebMoreMenuFeedbackLink"],
+        ["ui_web_more_menu_help_link"] = ["Tenant__UiWebMoreMenuHelpLink"],
+        ["ui_web_settings_page_title"] = ["Tenant__UiWebSettingsPageTitle"],
+        ["ui_web_settings_header_title"] = ["Tenant__UiWebSettingsHeaderTitle"],
+        ["ui_web_knowledge_bank_header_title"] = ["Tenant__UiWebKnowledgeBankHeaderTitle"],
+        ["ui_web_knowledge_source_header_title"] = ["Tenant__UiWebKnowledgeSourceHeaderTitle"],
+        ["ui_web_knowledge_source_header_message"] = ["Tenant__UiWebKnowledgeSourceHeaderMessage"],
+        ["ui_web_knowledge_sources_table_title"] = ["Tenant__UiWebKnowledgeSourcesTableTitle"],
+        ["ui_web_knowledge_documents_table_title"] = ["Tenant__UiWebKnowledgeDocumentsTableTitle"]
     };
+
+    private static readonly Regex EnvReferencePattern = new("%([A-Za-z0-9_]+)%", RegexOptions.Compiled);
 
     // Loads each explicitly supported environment file and keeps the last file as the highest-precedence file.
     public static void LoadMany(IEnumerable<string> fileNames, string contentRootPath)
@@ -20,6 +55,25 @@ public static class EnvFileLoader
         {
             Load(fileName, contentRootPath);
         }
+    }
+
+    public static string ResolveTenantName()
+    {
+        var tenantName = Environment.GetEnvironmentVariable("OYAKO_TENANT_NAME");
+        if (string.IsNullOrWhiteSpace(tenantName))
+        {
+            tenantName = Environment.GetEnvironmentVariable("tenant_name");
+        }
+
+        return string.IsNullOrWhiteSpace(tenantName)
+            ? TenantOptions.DefaultTenantName
+            : tenantName.Trim();
+    }
+
+    public static void LoadTenant(string contentRootPath)
+    {
+        var tenantName = ResolveTenantName();
+        Load(Path.Combine(".tenants", $"{tenantName}.env"), contentRootPath);
     }
 
     // Executes this component behavior as part of the Oyako application flow.
@@ -34,7 +88,8 @@ public static class EnvFileLoader
         }
 
         // Iterates through the collection to process each item consistently.
-        foreach (var rawLine in File.ReadAllLines(filePath))
+        var parsedValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rawLine in File.ReadAllLines(filePath, Encoding.UTF8))
         {
             var line = rawLine.Trim();
             // Guards the following branch so the workflow handles this condition deliberately.
@@ -58,19 +113,34 @@ public static class EnvFileLoader
                 continue;
             }
 
-            SetEnvironmentValue(key, value);
+            parsedValues[key] = value;
+            SetEnvironmentValue(key, ExpandReferences(value, parsedValues));
         }
     }
 
     private static void SetEnvironmentValue(string key, string value)
     {
         Environment.SetEnvironmentVariable(key, value);
-        if (!Aliases.TryGetValue(key, out var mappedKey))
+        if (!Aliases.TryGetValue(key, out var mappedKeys))
         {
             return;
         }
 
-        Environment.SetEnvironmentVariable(mappedKey, NormalizeAliasValue(mappedKey, value));
+        foreach (var mappedKey in mappedKeys)
+        {
+            Environment.SetEnvironmentVariable(mappedKey, NormalizeAliasValue(mappedKey, value));
+        }
+    }
+
+    private static string ExpandReferences(string value, IReadOnlyDictionary<string, string> parsedValues)
+    {
+        return EnvReferencePattern.Replace(value, match =>
+        {
+            var key = match.Groups[1].Value;
+            return parsedValues.TryGetValue(key, out var parsedValue)
+                ? parsedValue
+                : Environment.GetEnvironmentVariable(key) ?? match.Value;
+        });
     }
 
     private static string NormalizeAliasValue(string mappedKey, string value)

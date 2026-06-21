@@ -115,6 +115,12 @@ public class SystemInstructionCacheTests
             // Returns the computed result to the caller and completes this branch of the workflow.
             return Task.FromResult($"generated system instruction {BuildCount}");
         }
+
+        public string BuildSystemPrompt(IReadOnlyList<KnowledgeDocumentCacheBlock> blocks)
+        {
+            BuildCount++;
+            return $"generated system instruction {BuildCount}";
+        }
     }
 
     private sealed class MutableWebPageRepository : IWebPageRepository

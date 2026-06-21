@@ -76,6 +76,44 @@ public static class ApiEndpoints
                 cancellationToken));
         });
 
+        app.MapGet("/api/tenant-config", (
+            IOptions<TenantOptions> tenantOptions,
+            IOptions<AiOptions> aiOptions) =>
+        {
+            var tenant = tenantOptions.Value;
+            var ai = aiOptions.Value;
+            var fallbackProvider = ai.FallbackProviders.FirstOrDefault() ?? "azure";
+            return Results.Ok(new TenantConfigResponse(
+                tenant.Id,
+                tenant.OrderNumber,
+                tenant.Name,
+                tenant.DisplayName,
+                tenant.AzureDomainName,
+                tenant.CustomDomainName,
+                tenant.WebUrl,
+                tenant.AdminEmail,
+                tenant.FeedbackEmail,
+                ai.DefaultProvider,
+                fallbackProvider,
+                tenant.UiWebBrandName,
+                tenant.UiWebAssistantName,
+                tenant.UiWebTitle,
+                tenant.UiWebHeaderTitle,
+                tenant.UiWebBrandLogoUrl,
+                tenant.UiWebAssistantWelcomeMessage,
+                tenant.UiWebAssistantHeaderTitle,
+                tenant.UiWebMoreMenuBrandLink,
+                tenant.UiWebMoreMenuFeedbackLink,
+                tenant.UiWebMoreMenuHelpLink,
+                tenant.UiWebSettingsPageTitle,
+                tenant.UiWebSettingsHeaderTitle,
+                tenant.UiWebKnowledgeBankHeaderTitle,
+                tenant.UiWebKnowledgeSourceHeaderTitle,
+                tenant.UiWebKnowledgeSourceHeaderMessage,
+                tenant.UiWebKnowledgeSourcesTableTitle,
+                tenant.UiWebKnowledgeDocumentsTableTitle));
+        });
+
         // Registers or maps application behavior into the runtime pipeline.
         app.MapPost("/api/knowledge-redownload", async (
             IKnowledgeRedownloadService knowledgeRedownloadService,

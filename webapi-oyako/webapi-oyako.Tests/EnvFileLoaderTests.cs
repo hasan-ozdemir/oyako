@@ -39,8 +39,8 @@ public sealed class EnvFileLoaderTests
     }
 
     [Fact]
-    // Verifies that oyako.env is part of the bootstrap contract and exposes user-friendly aliases.
-    public void LoadMany_ReadsOyakoEnvAliases()
+    // Verifies explicitly loaded env files can expose user-friendly aliases.
+    public void LoadMany_ReadsExplicitEnvAliases()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"oyako-env-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
@@ -50,13 +50,13 @@ public sealed class EnvFileLoaderTests
         try
         {
             File.WriteAllText(
-                Path.Combine(tempRoot, "oyako.env"),
+                Path.Combine(tempRoot, "runtime.env"),
                 """
                 web_document_max_count=1000
                 ai_fallback_provider=azure-cloud
                 """);
 
-            EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env", "oyako.env"], tempRoot);
+            EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env", "runtime.env"], tempRoot);
 
             Assert.Equal("1000", Environment.GetEnvironmentVariable(crawlerKey));
             Assert.Equal("azure", Environment.GetEnvironmentVariable(fallbackKey));
@@ -67,6 +67,69 @@ public sealed class EnvFileLoaderTests
             Environment.SetEnvironmentVariable("ai_fallback_provider", null);
             Environment.SetEnvironmentVariable(crawlerKey, null);
             Environment.SetEnvironmentVariable(fallbackKey, null);
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    // Verifies tenant env files are loaded from .tenants and expose UI, tenant, and AI aliases.
+    public void LoadTenant_ReadsDefaultTenantEnvAliases()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"oyako-tenant-env-{Guid.NewGuid():N}");
+        var tenantsRoot = Path.Combine(tempRoot, ".tenants");
+        Directory.CreateDirectory(tenantsRoot);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tenantsRoot, "oyakdijital.env"),
+                """
+                tenant_id=013dfb350ed64e324a805eae86646ddf
+                tenant_name=oyakdijital
+                ui_web_assistant_name=Oyako
+                ui_web_brand_name=Oyak Dijital
+                ui_web_title=%ui_web_assistant_name%: %ui_web_brand_name% Soru-Cevap Platformu
+                primary_ai_provider=ollama-cloud
+                secondary_ai_provider=azure-cloud
+                ai_provider_ollama_cloud_model=minimax-m3:cloud
+                ai_provider_azure_cloud_model=deepseek-v4-flash
+                """);
+
+            Environment.SetEnvironmentVariable("OYAKO_TENANT_NAME", null);
+            EnvFileLoader.LoadTenant(tempRoot);
+
+            Assert.Equal("oyakdijital", Environment.GetEnvironmentVariable("Tenant__Name"));
+            Assert.Equal("Oyako: Oyak Dijital Soru-Cevap Platformu", Environment.GetEnvironmentVariable("Tenant__UiWebTitle"));
+            Assert.Equal("ollama-cloud", Environment.GetEnvironmentVariable("Ai__DefaultProvider"));
+            Assert.Equal("azure", Environment.GetEnvironmentVariable("Ai__FallbackProviders__0"));
+            Assert.Equal("minimax-m3:cloud", Environment.GetEnvironmentVariable("OllamaCloud__Models__0"));
+            Assert.Equal("deepseek-v4-flash", Environment.GetEnvironmentVariable("AzureAi__Deployments__0"));
+        }
+        finally
+        {
+            foreach (var key in new[]
+            {
+                "tenant_id",
+                "tenant_name",
+                "ui_web_assistant_name",
+                "ui_web_brand_name",
+                "ui_web_title",
+                "primary_ai_provider",
+                "secondary_ai_provider",
+                "ai_provider_ollama_cloud_model",
+                "ai_provider_azure_cloud_model",
+                "Tenant__Name",
+                "Tenant__UiWebTitle",
+                "Ai__DefaultProvider",
+                "Ai__FallbackProviders__0",
+                "OllamaCloud__Models__0",
+                "AzureAi__Deployments__0",
+                "OYAKO_TENANT_NAME"
+            })
+            {
+                Environment.SetEnvironmentVariable(key, null);
+            }
+
             Directory.Delete(tempRoot, recursive: true);
         }
     }

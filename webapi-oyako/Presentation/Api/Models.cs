@@ -55,6 +55,37 @@ public sealed record HealthResponse(
     KnowledgeHealthResponse Knowledge,
     DateTime CheckedAtUtc);
 
+// Defines the public tenant configuration shape consumed by the React UI.
+public sealed record TenantConfigResponse(
+    string TenantId,
+    int TenantOrderNumber,
+    string TenantName,
+    string TenantDisplayName,
+    string TenantAzureDomainName,
+    string TenantCustomDomainName,
+    string TenantWebUrl,
+    string TenantAdminEmail,
+    string TenantFeedbackEmail,
+    string PrimaryAiProvider,
+    string SecondaryAiProvider,
+    string UiWebBrandName,
+    string UiWebAssistantName,
+    string UiWebTitle,
+    string UiWebHeaderTitle,
+    string UiWebBrandLogoUrl,
+    string UiWebAssistantWelcomeMessage,
+    string UiWebAssistantHeaderTitle,
+    string UiWebMoreMenuBrandLink,
+    string UiWebMoreMenuFeedbackLink,
+    string UiWebMoreMenuHelpLink,
+    string UiWebSettingsPageTitle,
+    string UiWebSettingsHeaderTitle,
+    string UiWebKnowledgeBankHeaderTitle,
+    string UiWebKnowledgeSourceHeaderTitle,
+    string UiWebKnowledgeSourceHeaderMessage,
+    string UiWebKnowledgeSourcesTableTitle,
+    string UiWebKnowledgeDocumentsTableTitle);
+
 // Defines the immutable KnowledgeRedownloadResponse data shape exchanged between Oyako components.
 public sealed record KnowledgeRedownloadResponse(
     string Status,

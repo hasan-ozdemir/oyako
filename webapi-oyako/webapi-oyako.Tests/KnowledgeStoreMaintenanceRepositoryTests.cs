@@ -63,7 +63,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "knowledge_sources"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal("https://oyakdijital.com.tr", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
+            Assert.Equal("https://www.oyakdijital.com.tr", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "ai_settings"));
             // Verifies the expected behavior for this test scenario.
@@ -309,7 +309,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "web_pages"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal(1, await CountAsync(database.ConnectionString, "knowledge_sources"));
+            Assert.Equal(1, await CountWhereAsync(database.ConnectionString, "knowledge_sources", "address", "https://oyakdijital.com.tr"));
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(0, await DuplicateCountAsync(database.ConnectionString, "web_pages", "web_source_url"));
             // Verifies the expected behavior for this test scenario.
@@ -456,7 +456,8 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             Options.Create(new AzureAiOptions { DeploymentName = "DeepSeek-V4-Flash" }),
             // Creates the object needed for the next step of the workflow.
             Options.Create(new OllamaLocalOptions { Model = "gemma4:12b" }),
-            Options.Create(new OllamaCloudOptions { Model = "minimax-m3:cloud" }));
+            Options.Create(new OllamaCloudOptions { Model = "minimax-m3:cloud" }),
+            Options.Create(new TenantOptions()));
 
         // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
         await initializer.InitializeAsync(CancellationToken.None);
@@ -580,6 +581,16 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
         await using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM {tableName};";
         // Returns the computed result to the caller and completes this branch of the workflow.
+        return (long)(await command.ExecuteScalarAsync() ?? 0L);
+    }
+
+    private static async Task<long> CountWhereAsync(string connectionString, string tableName, string columnName, string value)
+    {
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {tableName} WHERE {columnName} = $value;";
+        command.Parameters.AddWithValue("$value", value);
         return (long)(await command.ExecuteScalarAsync() ?? 0L);
     }
 

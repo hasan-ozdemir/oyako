@@ -19,7 +19,8 @@ if (args.Any(arg => string.Equals(arg, "--install-playwright-deps", StringCompar
     return Microsoft.Playwright.Program.Main(["install-deps", "chromium"]);
 }
 
-EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env", "oyako.env"], Directory.GetCurrentDirectory());
+EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env"], Directory.GetCurrentDirectory());
+EnvFileLoader.LoadTenant(Directory.GetCurrentDirectory());
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
 
