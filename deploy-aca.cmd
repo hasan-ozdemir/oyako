@@ -1,29 +1,33 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+chcp 65001 >nul
 
 set "OYAKO_SCRIPT_SELF=%~f0"
 set "OYAKO_SCRIPT_PS1=%TEMP%\oyako-deploy-aca-%RANDOM%-%RANDOM%.ps1"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $src=Get-Content -Raw -LiteralPath $env:OYAKO_SCRIPT_SELF; $parts=$src -split '(?m)^:POWERSHELL_BEGIN\r?$',2; if($parts.Count -lt 2){ throw 'PowerShell payload marker was not found.' }; Set-Content -LiteralPath $env:OYAKO_SCRIPT_PS1 -Value $parts[1] -Encoding UTF8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $src=Get-Content -Raw -Encoding UTF8 -LiteralPath $env:OYAKO_SCRIPT_SELF; $parts=$src -split '(?m)^:POWERSHELL_BEGIN\r?$',2; if($parts.Count -lt 2){ throw 'PowerShell payload marker was not found.' }; Set-Content -LiteralPath $env:OYAKO_SCRIPT_PS1 -Value $parts[1] -Encoding UTF8"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%OYAKO_SCRIPT_PS1%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%OYAKO_SCRIPT_PS1%" %*
 set "OYAKO_SCRIPT_EXIT=%ERRORLEVEL%"
 
 del "%OYAKO_SCRIPT_PS1%" >nul 2>nul
 exit /b %OYAKO_SCRIPT_EXIT%
 
 :POWERSHELL_BEGIN
-param()
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$ScriptArgs)
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Script -ErrorAction SilentlyContinue
 
 $Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
 $Subscription = "az2vs"
 $Location = "italynorth"
-$ResourceGroup = "rg-oyako"
+$ResourceGroup = ""
+$DefaultTenantName = "oyakdijital"
 $DefaultTenantSlug = "oyako"
 $DefaultAppName = "oyako"
 $DefaultEnvironmentName = "oyako-aca-env"
@@ -41,9 +45,11 @@ $Cpu = "0.25"
 $Memory = "0.5Gi"
 $SmokeTimeoutSeconds = 240
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
+$script:TargetTenantName = $DefaultTenantName
 
 function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
+function Warn([string]$Message) { Write-Host "WARNING: $Message" -ForegroundColor Yellow }
 function Fail([string]$Message) { throw $Message }
 
 function Merge-ArgumentList {
@@ -194,7 +200,7 @@ function Read-EnvFile([string]$Path) {
     }
 
     $values = @{}
-    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+    foreach ($rawLine in Get-Content -Encoding UTF8 -LiteralPath $Path) {
         $line = $rawLine.Trim()
         if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
         $separator = $line.IndexOf("=")
@@ -231,6 +237,116 @@ function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     return $DefaultValue
 }
 
+function Normalize-AiProvider([string]$Value, [string]$Name) {
+    $normalized = $Value.Trim().ToLowerInvariant()
+    switch ($normalized) {
+        "azure" { return "azure" }
+        "azure-cloud" { return "azure" }
+        "ollama-cloud" { return "ollama-cloud" }
+        "ollama-local" { return "ollama-local" }
+        default { Fail "$Name '$Value' is not a supported AI provider." }
+    }
+}
+
+function Assert-BoolValue([string]$Value, [string]$Name) {
+    if ($Value -notin @("true", "false", "True", "False", "TRUE", "FALSE")) {
+        Fail "$Name must be true or false."
+    }
+    return $Value.ToLowerInvariant()
+}
+
+function Assert-PositiveInt([string]$Value, [string]$Name) {
+    $parsed = 0
+    if (-not [int]::TryParse($Value, [ref]$parsed) -or $parsed -lt 1) {
+        Fail "$Name must be a positive integer."
+    }
+    return [string]$parsed
+}
+
+function Expand-EnvReferences([hashtable]$Map) {
+    $expanded = @{}
+    foreach ($key in $Map.Keys) {
+        $value = [string]$Map[$key]
+        $expanded[$key] = [regex]::Replace($value, "%([A-Za-z0-9_]+)%", {
+            param($match)
+            $reference = $match.Groups[1].Value
+            if ($Map.ContainsKey($reference)) { return [string]$Map[$reference] }
+            return $match.Value
+        })
+    }
+    return $expanded
+}
+
+function Resolve-TenantName {
+    $tenantName = $DefaultTenantName
+    for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
+        $arg = [string]$ScriptArgs[$index]
+        if ($arg -eq "--tenant-name" -or $arg -eq "-t") {
+            if ($index + 1 -ge $ScriptArgs.Count) { Fail "$arg requires a tenant name." }
+            $tenantName = [string]$ScriptArgs[$index + 1]
+            $index++
+            continue
+        }
+        if ($arg.StartsWith("--tenant-name=", [StringComparison]::OrdinalIgnoreCase)) {
+            $tenantName = $arg.Substring("--tenant-name=".Length)
+            continue
+        }
+        Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>]"
+    }
+
+    if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
+        Fail "Tenant name '$tenantName' must be lowercase letters, numbers, or hyphen."
+    }
+    return $tenantName
+}
+
+function Load-TenantEnv([string]$TenantName) {
+    $path = Join-Path $Root ".tenants\$TenantName.env"
+    $tenantEnv = Expand-EnvReferences (Read-EnvFile $path)
+    $requiredKeys = @(
+        "tenant_id",
+        "tenant_order_number",
+        "tenant_name",
+        "tenant_display_name",
+        "tenant_azure_domain_name",
+        "tenant_custom_domain_name",
+        "tenant_web_url",
+        "tenant_admin_email",
+        "tenant_feedback_email",
+        "primary_ai_provider",
+        "secondary_ai_provider",
+        "ai_provider_ollama_cloud_model",
+        "ai_provider_azure_cloud_model",
+        "ui_web_brand_name",
+        "ui_web_assistant_name",
+        "ui_web_title",
+        "ui_web_header_title",
+        "ui_web_brand_logo_url",
+        "ui_web_assistant_welcome_message",
+        "ui_web_assistant_header_title",
+        "ui_web_more_menu_brand_link",
+        "ui_web_more_menu_feedback_link",
+        "ui_web_more_menu_help_link",
+        "ui_web_settings_page_title",
+        "ui_web_settings_header_title",
+        "ui_web_knowledge_bank_header_title",
+        "ui_web_knowledge_source_header_title",
+        "ui_web_knowledge_source_header_message",
+        "ui_web_knowledge_sources_table_title",
+        "ui_web_knowledge_documents_table_title"
+    )
+    Require-EnvKeys $tenantEnv $requiredKeys $path
+    if ([string]$tenantEnv["tenant_name"] -ne $TenantName) {
+        Fail "Tenant file '$path' declares tenant_name='$($tenantEnv["tenant_name"])', expected '$TenantName'."
+    }
+    if ([string]$tenantEnv["tenant_id"] -notmatch "^[a-f0-9]{32}$") {
+        Fail "tenant_id must be 32 lowercase hex characters."
+    }
+    [void](Assert-PositiveInt ([string]$tenantEnv["tenant_order_number"]) "tenant_order_number")
+    Assert-DnsLabel ([string]$tenantEnv["tenant_azure_domain_name"]) "tenant_azure_domain_name" 32
+    return [pscustomobject]@{ Path = $path; Values = $tenantEnv }
+}
+
 function Assert-DnsLabel([string]$Value, [string]$Description, [int]$MaxLength) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         Fail "$Description cannot be empty."
@@ -241,6 +357,34 @@ function Assert-DnsLabel([string]$Value, [string]$Description, [int]$MaxLength) 
     if ($Value -cne $Value.ToLowerInvariant() -or $Value -notmatch "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$") {
         Fail "$Description '$Value' must be a lowercase DNS label: letters, numbers, hyphen, and no leading/trailing hyphen."
     }
+}
+
+function Try-ConfigureCustomDomain([string]$CustomDomain, [string]$DefaultFqdn) {
+    if ([string]::IsNullOrWhiteSpace($CustomDomain)) {
+        Warn "tenant_custom_domain_name is empty. Continuing with https://$DefaultFqdn/."
+        return
+    }
+
+    $cname = Resolve-DnsName -Name $CustomDomain -Type CNAME -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $cname -or ([string]$cname.NameHost).TrimEnd(".") -ne $DefaultFqdn) {
+        Warn "Custom domain '$CustomDomain' is not configured as a CNAME to '$DefaultFqdn'. Skipping optional custom domain binding."
+        return
+    }
+
+    $addResult = TryAz @("containerapp", "hostname", "add", "--hostname", $CustomDomain, "--name", $AppName, "--resource-group", $ResourceGroup)
+    if (-not $addResult.Ok) {
+        Warn "Could not add Container App custom hostname '$CustomDomain'. $($addResult.Text)"
+        return
+    }
+
+    $bindResult = TryAz @("containerapp", "hostname", "bind", "--hostname", $CustomDomain, "--name", $AppName, "--resource-group", $ResourceGroup, "--environment", $EnvironmentName, "--validation-method", "CNAME")
+    if (-not $bindResult.Ok) {
+        Warn "Could not bind managed certificate for Container App custom hostname '$CustomDomain'. $($bindResult.Text)"
+        return
+    }
+
+    Ok "Custom domain '$CustomDomain' is configured."
 }
 
 function Ensure-Provider([string]$Namespace) {
@@ -515,21 +659,32 @@ try {
 
     $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
     $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
-    $oyakoEnv = Read-OptionalEnvFile (Join-Path $Root "oyako.env")
+    $tenantName = Resolve-TenantName
+    $script:TargetTenantName = $tenantName
+    $tenantInfo = Load-TenantEnv $tenantName
+    $tenantEnv = $tenantInfo.Values
     Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
     Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
-    $tenantSlug = EnvValue $oyakoEnv "OYAKO_TENANT_SLUG" $DefaultTenantSlug
-    $AppName = EnvValue $oyakoEnv "OYAKO_ACA_APP_NAME" $tenantSlug
-    $EnvironmentName = EnvValue $oyakoEnv "OYAKO_ACA_ENV_NAME" $DefaultEnvironmentName
-    $PreviousAppName = EnvValue $oyakoEnv "OYAKO_ACA_PREVIOUS_APP_NAME" $PreviousAppName
-    $PreviousEnvironmentName = EnvValue $oyakoEnv "OYAKO_ACA_PREVIOUS_ENV_NAME" $PreviousEnvironmentName
-    Assert-DnsLabel $tenantSlug "OYAKO_TENANT_SLUG" 32
-    Assert-DnsLabel $AppName "OYAKO_ACA_APP_NAME" 32
-    Assert-DnsLabel $EnvironmentName "OYAKO_ACA_ENV_NAME" 32
-    if (-not [string]::IsNullOrWhiteSpace($PreviousAppName)) { Assert-DnsLabel $PreviousAppName "OYAKO_ACA_PREVIOUS_APP_NAME" 32 }
-    if (-not [string]::IsNullOrWhiteSpace($PreviousEnvironmentName)) { Assert-DnsLabel $PreviousEnvironmentName "OYAKO_ACA_PREVIOUS_ENV_NAME" 32 }
+    $tenantSlug = EnvValue $tenantEnv "tenant_azure_domain_name" $DefaultTenantSlug
+    $ResourceGroup = "rg-$($tenantEnv["tenant_id"])-$($tenantEnv["tenant_order_number"])"
+    $AppName = $tenantSlug
+    $EnvironmentName = "$tenantSlug-aca-env"
+    $PreviousAppName = ""
+    $PreviousEnvironmentName = ""
+    $Tags = @(
+        "app=oyako",
+        "managed-by=$ManagedBy",
+        "deployment-scope=$Scope",
+        "tenant-name=$tenantName",
+        "tenant-id=$($tenantEnv["tenant_id"])",
+        "tenant-order-number=$($tenantEnv["tenant_order_number"])"
+    )
+    Assert-DnsLabel $tenantSlug "tenant_azure_domain_name" 32
+    Assert-DnsLabel $AppName "Container App name" 32
+    Assert-DnsLabel $EnvironmentName "Container Apps Environment name" 32
     Ok "Required env files and keys are present."
-    Ok "ACA naming: app '$AppName', environment '$EnvironmentName'."
+    Ok "Tenant '$tenantName' loaded from $($tenantInfo.Path)."
+    Ok "ACA naming: resource group '$ResourceGroup', app '$AppName', environment '$EnvironmentName'."
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
@@ -564,7 +719,8 @@ try {
 
     Step "Ensuring deterministic ACR"
     $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
-    $acrName = "oyakoacr$($subscriptionCompact.Substring(0, 12))"
+    $tenantIdCompact = [string]$tenantEnv["tenant_id"]
+    $acrName = "oyakoacr$($tenantIdCompact.Substring(0, 12))"
     $legacyAcrName = "acaoyako$($subscriptionCompact.Substring(0, 8))weacr"
     $acr = Get-Acr $acrName
     Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
@@ -623,30 +779,69 @@ try {
     Ensure-AcrPull $acrId
 
     Step "Deploying Container App image"
-    $aiProvider = EnvValue $azureEnv "Ai__DefaultProvider" "ollama-cloud"
+    $aiProvider = Normalize-AiProvider (EnvValue $tenantEnv "primary_ai_provider" "ollama-cloud") "primary_ai_provider"
+    $aiFallbackProvider = Normalize-AiProvider (EnvValue $tenantEnv "secondary_ai_provider" "azure-cloud") "secondary_ai_provider"
+    $crawlerDomainOnly = Assert-BoolValue (EnvValue $tenantEnv "domain_only_crawling" "true") "domain_only_crawling"
+    $crawlerMaxPages = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_count" "1000") "web_document_max_count"
+    $crawlerMaxDepth = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_depth" "10") "web_document_max_depth"
+    $tenantAppSettings = @(
+        "OYAKO_TENANT_NAME=$tenantName",
+        "Tenant__Id=$($tenantEnv["tenant_id"])",
+        "Tenant__OrderNumber=$($tenantEnv["tenant_order_number"])",
+        "Tenant__Name=$($tenantEnv["tenant_name"])",
+        "Tenant__DisplayName=$($tenantEnv["tenant_display_name"])",
+        "Tenant__AzureDomainName=$($tenantEnv["tenant_azure_domain_name"])",
+        "Tenant__CustomDomainName=$($tenantEnv["tenant_custom_domain_name"])",
+        "Tenant__WebUrl=$($tenantEnv["tenant_web_url"])",
+        "Tenant__AdminEmail=$($tenantEnv["tenant_admin_email"])",
+        "Tenant__FeedbackEmail=$($tenantEnv["tenant_feedback_email"])",
+        "Tenant__UiWebBrandName=$($tenantEnv["ui_web_brand_name"])",
+        "Tenant__UiWebAssistantName=$($tenantEnv["ui_web_assistant_name"])",
+        "Tenant__UiWebTitle=$($tenantEnv["ui_web_title"])",
+        "Tenant__UiWebHeaderTitle=$($tenantEnv["ui_web_header_title"])",
+        "Tenant__UiWebBrandLogoUrl=$($tenantEnv["ui_web_brand_logo_url"])",
+        "Tenant__UiWebAssistantWelcomeMessage=$($tenantEnv["ui_web_assistant_welcome_message"])",
+        "Tenant__UiWebAssistantHeaderTitle=$($tenantEnv["ui_web_assistant_header_title"])",
+        "Tenant__UiWebMoreMenuBrandLink=$($tenantEnv["ui_web_more_menu_brand_link"])",
+        "Tenant__UiWebMoreMenuFeedbackLink=$($tenantEnv["ui_web_more_menu_feedback_link"])",
+        "Tenant__UiWebMoreMenuHelpLink=$($tenantEnv["ui_web_more_menu_help_link"])",
+        "Tenant__UiWebSettingsPageTitle=$($tenantEnv["ui_web_settings_page_title"])",
+        "Tenant__UiWebSettingsHeaderTitle=$($tenantEnv["ui_web_settings_header_title"])",
+        "Tenant__UiWebKnowledgeBankHeaderTitle=$($tenantEnv["ui_web_knowledge_bank_header_title"])",
+        "Tenant__UiWebKnowledgeSourceHeaderTitle=$($tenantEnv["ui_web_knowledge_source_header_title"])",
+        "Tenant__UiWebKnowledgeSourceHeaderMessage=$($tenantEnv["ui_web_knowledge_source_header_message"])",
+        "Tenant__UiWebKnowledgeSourcesTableTitle=$($tenantEnv["ui_web_knowledge_sources_table_title"])",
+        "Tenant__UiWebKnowledgeDocumentsTableTitle=$($tenantEnv["ui_web_knowledge_documents_table_title"])"
+    )
     $envVars = @(
         "ASPNETCORE_ENVIRONMENT=Production",
         "ASPNETCORE_URLS=http://+:8080",
         "OYAKO_DOCKER=1",
         "Storage__DataRoot=/app/data",
-        "Sqlite__ConnectionString=Data Source=/app/data/oyako.sqlite;Cache=Shared",
+        "Sqlite__ConnectionString=Data Source=/app/data/$tenantName/oyako.sqlite;Cache=Shared",
         "Ai__DefaultProvider=$aiProvider",
+        "Ai__FallbackProviders__0=$aiFallbackProvider",
         "Ai__DisabledProviders__0=ollama-local",
+        "Crawler__DomainOnlyCrawling=$crawlerDomainOnly",
+        "Crawler__IncludeSubdomains=true",
+        "Crawler__MaxPagesToCrawl=$crawlerMaxPages",
+        "Crawler__MaxDepth=$crawlerMaxDepth",
         "AzureAi__Endpoint=$($azureEnv["AzureAi__Endpoint"])",
-        "AzureAi__DeploymentName=$($azureEnv["AzureAi__DeploymentName"])",
-        "AzureAi__Deployments__0=$($azureEnv["AzureAi__Deployments__0"])",
+        "AzureAi__DeploymentName=$($tenantEnv["ai_provider_azure_cloud_model"])",
+        "AzureAi__Deployments__0=$($tenantEnv["ai_provider_azure_cloud_model"])",
         "AzureAi__ApiVersion=$($azureEnv["AzureAi__ApiVersion"])",
         "AzureAi__TimeoutSeconds=$(EnvValue $azureEnv "AzureAi__TimeoutSeconds" "180")",
         "AzureAi__Temperature=$(EnvValue $azureEnv "AzureAi__Temperature" "0.2")",
         "AzureAi__ApiKey=secretref:azure-ai-api-key",
         "OllamaCloud__BaseUrl=$(EnvValue $ollamaEnv "OllamaCloud__BaseUrl" "https://ollama.com")",
-        "OllamaCloud__Model=$(EnvValue $ollamaEnv "OllamaCloud__Model" "minimax-m3:cloud")",
+        "OllamaCloud__Model=$($tenantEnv["ai_provider_ollama_cloud_model"])",
+        "OllamaCloud__Models__0=$($tenantEnv["ai_provider_ollama_cloud_model"])",
         "OllamaCloud__TimeoutSeconds=$(EnvValue $ollamaEnv "OllamaCloud__TimeoutSeconds" "180")",
         "OllamaCloud__Temperature=$(EnvValue $ollamaEnv "OllamaCloud__Temperature" "0.2")",
         "OllamaCloud__ApiKey=secretref:ollama-api-key",
         "ollama_api_key=secretref:ollama-api-key",
         "DEPLOYMENT_TIMESTAMP=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
-    )
+    ) + $tenantAppSettings
     $revisionSuffix = "d$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
     Az ((@(
         "containerapp", "update",
@@ -670,9 +865,10 @@ try {
     }
     $baseUrl = "https://$fqdn"
     $apiBaseUrl = "$baseUrl/api"
+    Try-ConfigureCustomDomain ([string]$tenantEnv["tenant_custom_domain_name"]) $fqdn
 
     Step "Running smoke tests"
-    $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "Oyako"
+    $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds ([string]$tenantEnv["ui_web_assistant_name"])
     $healthSmoke = Wait-Smoke "ACA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
     $apiHealthSmoke = Wait-Smoke "ACA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds '"status":"ready"'
     $browserSmoke = Wait-Smoke "ACA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
@@ -700,8 +896,13 @@ try {
 
     Write-Host ""
     Write-Host "Oyako ACA deployment completed." -ForegroundColor Green
+    Write-Host "Tenant: $tenantName ($($tenantEnv["tenant_display_name"]))"
+    Write-Host "Resource group: $ResourceGroup"
     Write-Host "URL: $baseUrl/"
     Write-Host "API base: $apiBaseUrl"
+    if (-not [string]::IsNullOrWhiteSpace([string]$tenantEnv["tenant_custom_domain_name"])) {
+        Write-Host "Optional custom URL: https://$($tenantEnv["tenant_custom_domain_name"])/"
+    }
     Write-Host "API health: $baseUrl/health"
     Write-Host "API routed health: $apiBaseUrl/health"
     Write-Host "Browser health: $baseUrl/health/browser"
@@ -728,6 +929,6 @@ catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
     Write-Host "Retry command:"
-    Write-Host "  deploy-aca.cmd"
+    Write-Host "  deploy-aca.cmd --tenant-name $script:TargetTenantName"
     exit 1
 }

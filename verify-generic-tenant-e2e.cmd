@@ -30,6 +30,7 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $Root = Split-Path -Parent $env:OYAKO_SCRIPT_SELF
 $ApiBaseUrl = "http://localhost:5000"
+$TenantName = "generictenant"
 $SourceName = "generic-tenant"
 $SourceAddress = "https://www.generic-tenant.org.tr"
 $Question = "generic-tenant nasıl bağış yaparım?"
@@ -268,22 +269,25 @@ function Invoke-ChatWithRetry([string]$Message) {
 try {
     Set-Location -LiteralPath $Root
 
-    Step "Writing local non-secret oyako.env settings"
-    $oyakoEnvPath = Join-Path $Root "oyako.env"
-    Write-LocalEnvValue $oyakoEnvPath "domain_only_crawling" "true"
-    Write-LocalEnvValue $oyakoEnvPath "web_document_max_count" "1000"
-    Write-LocalEnvValue $oyakoEnvPath "web_document_max_depth" "10"
-    Write-LocalEnvValue $oyakoEnvPath "ai_default_provider" "ollama-cloud"
-    Write-LocalEnvValue $oyakoEnvPath "ai_fallback_provider" "azure-cloud"
-    Write-LocalEnvValue $oyakoEnvPath "Crawler__MinimumRequestDelayMilliseconds" "50"
-    Write-LocalEnvValue $oyakoEnvPath "Crawler__MaximumRequestDelayMilliseconds" "150"
-    Write-LocalEnvValue $oyakoEnvPath "Crawler__RequestTimeoutSeconds" "4"
-    Write-LocalEnvValue $oyakoEnvPath "Crawler__SourceRefreshEnabled" "false"
-    Write-LocalEnvValue $oyakoEnvPath "Crawler__LocalKnowledgeRebuildOnStartupEnabled" "false"
-    Ok "oyako.env contains the requested non-secret defaults."
+    Step "Writing local non-secret tenant env settings"
+    $tenantEnvPath = Join-Path $Root ".tenants\$TenantName.env"
+    if (-not (Test-Path -LiteralPath $tenantEnvPath)) {
+        Fail "Tenant env file was not found: $tenantEnvPath"
+    }
+    Write-LocalEnvValue $tenantEnvPath "domain_only_crawling" "true"
+    Write-LocalEnvValue $tenantEnvPath "web_document_max_count" "1000"
+    Write-LocalEnvValue $tenantEnvPath "web_document_max_depth" "10"
+    Write-LocalEnvValue $tenantEnvPath "primary_ai_provider" "ollama-cloud"
+    Write-LocalEnvValue $tenantEnvPath "secondary_ai_provider" "azure-cloud"
+    Write-LocalEnvValue $tenantEnvPath "Crawler__MinimumRequestDelayMilliseconds" "50"
+    Write-LocalEnvValue $tenantEnvPath "Crawler__MaximumRequestDelayMilliseconds" "150"
+    Write-LocalEnvValue $tenantEnvPath "Crawler__RequestTimeoutSeconds" "4"
+    Write-LocalEnvValue $tenantEnvPath "Crawler__SourceRefreshEnabled" "false"
+    Write-LocalEnvValue $tenantEnvPath "Crawler__LocalKnowledgeRebuildOnStartupEnabled" "false"
+    Ok "$TenantName tenant env contains the requested non-secret defaults."
 
     Step "Starting local Oyako app through run-app.cmd"
-    & (Join-Path $Root "run-app.cmd")
+    & (Join-Path $Root "run-app.cmd") "--tenant-name" $TenantName "--no-browser"
     if ($LASTEXITCODE -ne 0) {
         Fail "run-app.cmd failed with exit code $LASTEXITCODE."
     }
