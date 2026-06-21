@@ -27,7 +27,10 @@ public static class DependencyInjection
         // Registers or maps application behavior into the runtime pipeline.
         services.Configure<CrawlerOptions>(configuration.GetSection(CrawlerOptions.SectionName));
         // Registers or maps application behavior into the runtime pipeline.
-        services.Configure<TenantOptions>(configuration.GetSection(TenantOptions.SectionName));
+        services.AddSingleton<IValidateOptions<TenantOptions>, TenantOptionsValidator>();
+        services.AddOptions<TenantOptions>()
+            .Bind(configuration.GetSection(TenantOptions.SectionName))
+            .ValidateOnStart();
         // Registers or maps application behavior into the runtime pipeline.
         services.Configure<OllamaLocalOptions>(configuration.GetSection(OllamaLocalOptions.SectionName));
         // Registers or maps application behavior into the runtime pipeline.
