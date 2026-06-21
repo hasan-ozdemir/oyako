@@ -80,6 +80,38 @@ export interface KnowledgeBankSource {
   updatedAtUtc: string
 }
 
+// Defines the public tenant configuration returned by the backend.
+export interface TenantConfigResponse {
+  tenantId: string
+  tenantOrderNumber: number
+  tenantName: string
+  tenantDisplayName: string
+  tenantAzureDomainName: string
+  tenantCustomDomainName: string
+  tenantWebUrl: string
+  tenantAdminEmail: string
+  tenantFeedbackEmail: string
+  primaryAiProvider: string
+  secondaryAiProvider: string
+  uiWebBrandName: string
+  uiWebAssistantName: string
+  uiWebTitle: string
+  uiWebHeaderTitle: string
+  uiWebBrandLogoUrl: string
+  uiWebAssistantWelcomeMessage: string
+  uiWebAssistantHeaderTitle: string
+  uiWebMoreMenuBrandLink: string
+  uiWebMoreMenuFeedbackLink: string
+  uiWebMoreMenuHelpLink: string
+  uiWebSettingsPageTitle: string
+  uiWebSettingsHeaderTitle: string
+  uiWebKnowledgeBankHeaderTitle: string
+  uiWebKnowledgeSourceHeaderTitle: string
+  uiWebKnowledgeSourceHeaderMessage: string
+  uiWebKnowledgeSourcesTableTitle: string
+  uiWebKnowledgeDocumentsTableTitle: string
+}
+
 // Defines the TypeScript contract used by the Oyako frontend.
 export interface KnowledgeBankFolder {
   id: number

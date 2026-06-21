@@ -33,7 +33,7 @@ import {
   Upload,
   WifiOff,
 } from 'lucide-react'
-import type { AiSettingsResponse, ChatMessage, KnowledgeBankDocument, KnowledgeBankResponse, KnowledgeBankSource, KnowledgeDocumentContentResponse, KnowledgeDocumentDiagnosticsResponse, KnowledgeFilePreviewItem, KnowledgeRedownloadResponse, KnowledgeSourceDiagnosticsResponse, KnowledgeUploadSettingsResponse, QnaExperienceSettingsResponse, RuntimeStatus, SourceAttribution } from './types/chat'
+import type { AiSettingsResponse, ChatMessage, KnowledgeBankDocument, KnowledgeBankResponse, KnowledgeBankSource, KnowledgeDocumentContentResponse, KnowledgeDocumentDiagnosticsResponse, KnowledgeFilePreviewItem, KnowledgeRedownloadResponse, KnowledgeSourceDiagnosticsResponse, KnowledgeUploadSettingsResponse, QnaExperienceSettingsResponse, RuntimeStatus, SourceAttribution, TenantConfigResponse } from './types/chat'
 import {
   addKnowledgeSource,
   addManualWebDocument,
@@ -50,6 +50,7 @@ import {
   fetchQnaExperienceSettings,
   fetchReadyQuestions,
   fetchRuntimeStatus,
+  fetchTenantConfig,
   importKnowledgeFiles,
   previewKnowledgeFiles,
   redownloadKnowledgeDocument,
@@ -67,7 +68,6 @@ import {
   updateKnowledgeSource,
 } from './services/chatApi'
 import HelpPage from './HelpPage'
-import oyakDijitalLogo from './assets/oyak-dijital-logo.svg'
 import './App.css'
 
 // Defines the in-app document viewer state for local-file source attributions.
@@ -99,6 +99,38 @@ const defaultQnaExperienceSettings: QnaExperienceSettingsResponse = {
   autoSubmitPromptButtons: true,
   showAnswerSourceDocumentNames: true,
   updatedAtUtc: new Date(0).toISOString(),
+}
+
+// Defines the default tenant shown before runtime tenant config is loaded.
+const defaultTenantConfig: TenantConfigResponse = {
+  tenantId: '013dfb350ed64e324a805eae86646ddf',
+  tenantOrderNumber: 1,
+  tenantName: 'oyakdijital',
+  tenantDisplayName: 'Oyak Dijital',
+  tenantAzureDomainName: 'oyako',
+  tenantCustomDomainName: 'oyako.oyakdijital.com.tr',
+  tenantWebUrl: 'https://www.oyakdijital.com.tr',
+  tenantAdminEmail: 'admin@oyakdijital.com.tr',
+  tenantFeedbackEmail: 'iletisim@oyakdijital.com.tr',
+  primaryAiProvider: 'ollama-cloud',
+  secondaryAiProvider: 'azure',
+  uiWebBrandName: 'Oyak Dijital',
+  uiWebAssistantName: 'Oyako',
+  uiWebTitle: 'Oyako: Oyak Dijital Soru-Cevap Platformu',
+  uiWebHeaderTitle: 'Oyak Dijital soru-cevap platformu',
+  uiWebBrandLogoUrl: '/tenants/oyakdijital/brand-logo.svg',
+  uiWebAssistantWelcomeMessage: 'Merhaba, ben dijital asistanınız Oyako. Oyak Dijital ile ilgili merak ettiğiniz her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.',
+  uiWebAssistantHeaderTitle: 'Oyak Dijital hakkında öğrenmek istediğinizi sorun:',
+  uiWebMoreMenuBrandLink: 'Oyak Dijital',
+  uiWebMoreMenuFeedbackLink: 'Geri Bildirim Gönderin',
+  uiWebMoreMenuHelpLink: 'Yardım',
+  uiWebSettingsPageTitle: 'Ayarlar',
+  uiWebSettingsHeaderTitle: 'Oyako çalışma ayarları',
+  uiWebKnowledgeBankHeaderTitle: 'Bilgi Bankası',
+  uiWebKnowledgeSourceHeaderTitle: 'Bilgi Kaynakları',
+  uiWebKnowledgeSourceHeaderMessage: 'Oyako, sorularınıza cevap verirken aşağıda gösterilen {sourceCount} adet bilgi kaynağını ve {documentCount} adet belgeyi kullanabilir.',
+  uiWebKnowledgeSourcesTableTitle: 'Şu kaynaklar kullanılabilir:',
+  uiWebKnowledgeDocumentsTableTitle: 'Şu belgeler kullanılabilir:',
 }
 
 // Implements a frontend function that supports Oyako user or API behavior.
@@ -196,9 +228,11 @@ function normalizeRuntimeStatus(
 function SourceAttributionLine({
   attributions,
   onOpenDocument,
+  fallbackSourceName,
 }: {
   attributions: SourceAttribution[]
   onOpenDocument: (attribution: SourceAttribution) => void
+  fallbackSourceName: string
 }) {
   const groups = attributions.reduce<Array<{ key: string; sourceName: string; items: SourceAttribution[] }>>((acc, attribution) => {
     const key = `${attribution.sourceId}:${attribution.sourceName}`
@@ -216,7 +250,7 @@ function SourceAttributionLine({
     return (
       <p className="answer-source-line">
         <strong>Kaynak:</strong>
-        <span>Oyak Dijital</span>
+        <span>{fallbackSourceName}</span>
       </p>
     )
   }
@@ -643,7 +677,7 @@ function ConfirmDialog({
 }
 
 // Implements a frontend function that converts technical chat failures into user-friendly copy.
-function normalizeChatErrorMessage(rawMessage: string): string {
+function normalizeChatErrorMessage(rawMessage: string, assistantName: string): string {
   const compact = rawMessage.replace(/\s+/g, ' ').trim()
   const lower = compact.toLowerCase()
 
@@ -654,11 +688,11 @@ function normalizeChatErrorMessage(rawMessage: string): string {
     lower.includes('ollama') ||
     lower.includes('azure')
   ) {
-    return 'Oyako şu anda yanıt üretemedi. Lütfen birkaç saniye sonra tekrar deneyin.'
+    return `${assistantName} şu anda yanıt üretemedi. Lütfen birkaç saniye sonra tekrar deneyin.`
   }
 
   if (lower.includes('bağlantı kurulamadı') || lower.includes('failed to fetch') || lower.includes('network')) {
-    return 'Oyako servislerine şu anda ulaşılamıyor. Lütfen bağlantınızı kontrol edip tekrar deneyin.'
+    return `${assistantName} servislerine şu anda ulaşılamıyor. Lütfen bağlantınızı kontrol edip tekrar deneyin.`
   }
 
   if (lower.includes('sunucu yanıt akışı') || lower.includes('stream')) {
@@ -691,6 +725,14 @@ function formatSourceType(sourceType: string): string {
   return 'Web Sitesi'
 }
 
+function formatTenantCountMessage(template: string, sourceCount: number, documentCount: number): string {
+  return template
+    .replaceAll('{sourceCount}', String(sourceCount))
+    .replaceAll('{documentCount}', String(documentCount))
+    .replaceAll('[X]', String(sourceCount))
+    .replaceAll('[Y]', String(documentCount))
+}
+
 // Implements a frontend function that gets the browser-provided relative path for folder uploads.
 function getKnowledgeFileRelativePath(file: File): string {
   return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
@@ -710,6 +752,7 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   // Creates React state that drives an interactive part of the UI.
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus)
+  const [tenantConfig, setTenantConfig] = useState<TenantConfigResponse>(defaultTenantConfig)
   const appSurfaceRef = useRef<HTMLDivElement | null>(null)
   const lastFocusTargetRef = useRef<HTMLElement | null>(null)
   const hadFloatingSurfaceRef = useRef(false)
@@ -1028,6 +1071,17 @@ function App() {
       : knowledgeDocuments,
     [knowledgeDocuments, selectedKnowledgeSource],
   )
+  const knowledgeBankSummary = useMemo(
+    () => formatTenantCountMessage(tenantConfig.uiWebKnowledgeSourceHeaderMessage, visibleSourceCount, pageCount),
+    [pageCount, tenantConfig.uiWebKnowledgeSourceHeaderMessage, visibleSourceCount],
+  )
+
+  useEffect(() => {
+    document.title = tenantConfig.uiWebTitle
+    const description = `${tenantConfig.uiWebAssistantName}, ${tenantConfig.uiWebBrandName} bilgi kaynaklarıyla çalışan soru-cevap platformudur.`
+    document.querySelector('meta[name="description"]')?.setAttribute('content', description)
+    document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', tenantConfig.uiWebAssistantName)
+  }, [tenantConfig])
 
   // Runs a React side effect that enables Chromium folder selection for local file imports.
   useEffect(() => {
@@ -1043,6 +1097,9 @@ function App() {
 
     // Defines a reusable frontend value used by the surrounding module.
     const completeInitialLoad = async () => {
+      const loadedTenantConfig = await fetchTenantConfig().catch(() => defaultTenantConfig)
+      setTenantConfig(loadedTenantConfig)
+
       const initialQnaSettings = await fetchQnaExperienceSettings().catch(() => defaultQnaExperienceSettings)
       setQnaExperienceSettings(initialQnaSettings)
       setDraftDisplayedReadyQuestionCount(initialQnaSettings.displayedReadyQuestionCount)
@@ -2281,7 +2338,7 @@ function App() {
     }
 
     if (!canAskQuestion) {
-      const message = 'Oyako hazırlanıyor. Lütfen birkaç saniye sonra tekrar deneyin.'
+      const message = `${tenantConfig.uiWebAssistantName} hazırlanıyor. Lütfen birkaç saniye sonra tekrar deneyin.`
       showFloatingMessage(message)
       return
     }
@@ -2357,7 +2414,7 @@ function App() {
         }
       }
     } catch (ex) {
-      const message = normalizeChatErrorMessage(ex instanceof Error ? ex.message : 'Yanıt alınamadı.')
+      const message = normalizeChatErrorMessage(ex instanceof Error ? ex.message : 'Yanıt alınamadı.', tenantConfig.uiWebAssistantName)
       showFloatingMessage(message)
       setLatestSuggestionOwnerId(null)
       setLatestSuggestedQuestions([])
@@ -2642,13 +2699,13 @@ function App() {
     <div className="page-shell">
       <div ref={appSurfaceRef} className="app-interaction-surface">
       <header className="topbar" role="banner">
-        <div className="brand-lockup" aria-label="Oyako">
+        <div className="brand-lockup" aria-label={tenantConfig.uiWebAssistantName}>
           <div className="brand-mark" aria-hidden="true">
             <Bot size={22} />
           </div>
           <div className="brand-block">
-            <p className="brand">Oyako</p>
-            <h1>Oyak Dijital soru-cevap platformu</h1>
+            <p className="brand">{tenantConfig.uiWebAssistantName}</p>
+            <h1>{tenantConfig.uiWebHeaderTitle}</h1>
           </div>
         </div>
         <div className="topbar-actions" aria-label="Üst menü işlemleri">
@@ -2667,14 +2724,14 @@ function App() {
 
           <a
             className="oyak-brand-link"
-            href="https://www.oyakdijital.com.tr"
+            href={tenantConfig.tenantWebUrl}
             target="_blank"
             rel="noreferrer"
             role="link"
-            aria-label="Oyak Dijital"
+            aria-label={tenantConfig.uiWebBrandName}
           >
-            <img className="oyak-brand-logo" src={oyakDijitalLogo} alt="Oyak Dijital" />
-            <span className="oyak-brand-text" aria-hidden="true">OYAK DİJİTAL</span>
+            <img className="oyak-brand-logo" src={tenantConfig.uiWebBrandLogoUrl} alt={tenantConfig.uiWebBrandName} />
+            <span className="oyak-brand-text" aria-hidden="true">{tenantConfig.uiWebBrandName}</span>
           </a>
 
           <div className="user-menu-shell">
@@ -2703,26 +2760,25 @@ function App() {
 
           <button className="settings-open-button" type="button" onClick={() => void openSettingsPage()}>
             <Settings size={18} aria-hidden="true" />
-            <span>Ayarlar</span>
+            <span>{tenantConfig.uiWebSettingsPageTitle}</span>
           </button>
         </div>
       </header>
 
       <main className="workspace" id="main-content">
         <section className="question-panel" aria-labelledby="question-title">
-          <div className="assistant-intro-card" aria-label="Oyako karşılama mesajı">
+          <div className="assistant-intro-card" aria-label={`${tenantConfig.uiWebAssistantName} karşılama mesajı`}>
             <span className="assistant-intro-icon" aria-hidden="true">
               <Bot size={22} />
             </span>
             <p className="assistant-intro-copy">
-              Merhaba, ben dijital asistanınız Oyako. Oyak Dijital ile ilgili merak ettiğiniz
-              her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.
+              {tenantConfig.uiWebAssistantWelcomeMessage}
             </p>
           </div>
 
           <div className="section-heading">
             <HelpCircle size={20} aria-hidden="true" />
-            <h2 id="question-title">Oyak Dijital hakkında öğrenmek istediğinizi sorun:</h2>
+            <h2 id="question-title">{tenantConfig.uiWebAssistantHeaderTitle}</h2>
           </div>
 
           <form onSubmit={onSubmit} className="composer" aria-label="Soru gönder">
@@ -2804,7 +2860,7 @@ function App() {
                   className={`bubble ${message.role === 'user' ? 'bubble-user' : 'bubble-assistant'}`}
                 >
                   <div className="bubble-meta">
-                    <h4>{message.role === 'user' ? 'Siz' : 'Oyako'}</h4>
+                    <h4>{message.role === 'user' ? 'Siz' : tenantConfig.uiWebAssistantName}</h4>
                   </div>
                   {message.role === 'user' ? (
                     <p>{message.content}</p>
@@ -2819,6 +2875,7 @@ function App() {
                       {message.content && showAnswerSourceDocumentNames ? (
                         <SourceAttributionLine
                           attributions={message.sourceAttributions ?? []}
+                          fallbackSourceName={tenantConfig.uiWebBrandName}
                           onOpenDocument={(attribution) => void openDocumentViewer(attribution)}
                         />
                       ) : null}
@@ -2865,7 +2922,7 @@ function App() {
         </div>
         <button className="knowledge-link" type="button" onClick={openKnowledgeBank}>
           <Database size={16} aria-hidden="true" />
-          <span>Bilgi Bankası ({visibleSourceCount} Kaynak {pageCount} Belge)</span>
+          <span>{tenantConfig.uiWebKnowledgeBankHeaderTitle}</span>
         </button>
         <div className="utility-menu-wrap">
           <button
@@ -2881,17 +2938,17 @@ function App() {
           </button>
           {isUtilityMenuOpen ? (
             <div ref={utilityMenuRef} className="utility-menu" role="menu" aria-label="Daha Fazla...">
-              <button type="button" role="menuitem" onClick={() => openExternal('https://www.oyakdijital.com.tr')}>
+              <button type="button" role="menuitem" onClick={() => openExternal(tenantConfig.tenantWebUrl)}>
                 <Globe2 size={18} aria-hidden="true" />
-                <span>Oyak Dijital</span>
+                <span>{tenantConfig.uiWebMoreMenuBrandLink}</span>
               </button>
-              <button type="button" role="menuitem" onClick={() => openExternal('mailto:iletisim@oyakdijital.com.tr')}>
+              <button type="button" role="menuitem" onClick={() => openExternal(`mailto:${tenantConfig.tenantFeedbackEmail}`)}>
                 <Mail size={18} aria-hidden="true" />
-                <span>Geri Bildirim Gönderin</span>
+                <span>{tenantConfig.uiWebMoreMenuFeedbackLink}</span>
               </button>
               <button type="button" role="menuitem" onClick={openHelpPage}>
                 <HelpCircle size={18} aria-hidden="true" />
-                <span>Yardım</span>
+                <span>{tenantConfig.uiWebMoreMenuHelpLink}</span>
               </button>
             </div>
           ) : null}
@@ -2907,8 +2964,8 @@ function App() {
               <span>Geri</span>
             </button>
             <div>
-              <p className="eyebrow">Bilgi Bankası</p>
-              <h2 id="source-dialog-title">Oyako'nun kullandığı bilgi kaynakları</h2>
+              <p className="eyebrow">{tenantConfig.uiWebKnowledgeBankHeaderTitle}</p>
+              <h2 id="source-dialog-title">{tenantConfig.uiWebKnowledgeSourceHeaderTitle}</h2>
             </div>
             <div className="source-action-bar" aria-label="Bilgi Bankası işlemleri">
               <button
@@ -2925,9 +2982,8 @@ function App() {
 
           <div className="source-dialog-summary">
             <p>
-              Oyako, sorularınıza cevap verirken aşağıdaki bilgi kaynaklarını ve belgeleri kullanır.
+              {knowledgeBankSummary}
             </p>
-            <strong>{visibleSourceCount} kaynak, {pageCount} belge</strong>
           </div>
 
           {isSourcesLoading ? (
@@ -2945,8 +3001,7 @@ function App() {
             <div className="knowledge-bank-grid">
               <section className="knowledge-bank-section" aria-labelledby="knowledge-sources-title">
                 <div className="knowledge-bank-section-head">
-                  <h3 id="knowledge-sources-title">Oyako'nun kullandığı bilgi kaynakları</h3>
-                  <span>{knowledgeSources.length} kaynak</span>
+                  <h3 id="knowledge-sources-title">{tenantConfig.uiWebKnowledgeSourcesTableTitle}</h3>
                 </div>
                 <div className="knowledge-table-scroll">
                   <table className="knowledge-table">
@@ -3070,13 +3125,12 @@ function App() {
               <section className="knowledge-bank-section" aria-labelledby="knowledge-documents-title">
                 <div className="knowledge-bank-section-head">
                   <div>
-                    <h3 id="knowledge-documents-title">Oyako'nun cevap üretirken kullanabileceği belgeler</h3>
+                    <h3 id="knowledge-documents-title">{tenantConfig.uiWebKnowledgeDocumentsTableTitle}</h3>
                     <p className="section-subtitle">
                       {selectedKnowledgeSource ? `${selectedKnowledgeSource.name} kaynağına bağlı belgeler` : 'Tüm belgeler'}
                     </p>
                   </div>
                   <div className="document-section-actions">
-                    <span>{visibleKnowledgeDocuments.length} belge</span>
                     {selectedKnowledgeSource?.sourceType === 'web_links' ? (
                       <button type="button" className="secondary-action-button" onClick={() => openNewWebDocumentDialog(selectedKnowledgeSource)} disabled={isKnowledgeMutationBusy}>
                         <Globe2 size={17} aria-hidden="true" />
@@ -3245,7 +3299,7 @@ function App() {
                 id="new-source-name"
                 value={newSourceName}
                 onChange={(event) => setNewSourceName(event.target.value)}
-                placeholder={newSourceType === 'local_files' ? 'Yerel Dosyalar' : newSourceType === 'web_links' ? 'Web Bağlantıları' : 'Oyak Dijital'}
+                placeholder={newSourceType === 'local_files' ? 'Yerel Dosyalar' : newSourceType === 'web_links' ? 'Web Bağlantıları' : tenantConfig.uiWebBrandName}
                 disabled={isKnowledgeMutationBusy}
               />
             </label>
@@ -3878,8 +3932,8 @@ function App() {
               <span>Geri</span>
             </button>
             <div>
-              <p className="eyebrow">Ayarlar</p>
-              <h2 id="settings-dialog-title">Oyako çalışma ayarları</h2>
+              <p className="eyebrow">{tenantConfig.uiWebSettingsPageTitle}</p>
+              <h2 id="settings-dialog-title">{tenantConfig.uiWebSettingsHeaderTitle}</h2>
             </div>
           </div>
 
@@ -4030,7 +4084,7 @@ function App() {
         </div>
       ) : null}
 
-      {isHelpOpen ? <HelpPage onBack={closeHelpPage} /> : null}
+      {isHelpOpen ? <HelpPage onBack={closeHelpPage} tenantConfig={tenantConfig} /> : null}
 
       {floatingMessage ? (
         <MessageDialog

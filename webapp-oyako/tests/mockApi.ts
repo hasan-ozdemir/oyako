@@ -37,6 +37,36 @@ export const readyStatus = (): MockRuntimeStatus => ({
 // Implements a frontend function that supports Oyako user or API behavior.
 export async function mockOyakoApi(page: Page) {
   let statuses: MockRuntimeStatus[] = [readyStatus()]
+  const tenantConfig = {
+    tenantId: '013dfb350ed64e324a805eae86646ddf',
+    tenantOrderNumber: '1',
+    tenantName: 'oyakdijital',
+    tenantDisplayName: 'Oyak Dijital',
+    tenantAzureDomainName: 'oyako',
+    tenantCustomDomainName: 'oyako.oyakdijital.com.tr',
+    tenantWebUrl: 'https://www.oyakdijital.com.tr',
+    tenantAdminEmail: 'admin@oyakdijital.com.tr',
+    tenantFeedbackEmail: 'iletisim@oyakdijital.com.tr',
+    primaryAiProvider: 'ollama-cloud',
+    secondaryAiProvider: 'azure',
+    uiWebBrandName: 'Oyak Dijital',
+    uiWebAssistantName: 'Oyako',
+    uiWebTitle: 'Oyako: Oyak Dijital Soru-Cevap Platformu',
+    uiWebHeaderTitle: 'Oyak Dijital soru-cevap platformu',
+    uiWebBrandLogoUrl: '/tenants/oyakdijital/brand-logo.svg',
+    uiWebAssistantWelcomeMessage: 'Merhaba, ben dijital asistanınız Oyako. Oyak Dijital ile ilgili merak ettiğiniz her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.',
+    uiWebAssistantHeaderTitle: 'Oyak Dijital hakkında öğrenmek istediğinizi sorun:',
+    uiWebMoreMenuBrandLink: 'Oyak Dijital',
+    uiWebMoreMenuFeedbackLink: 'Geri Bildirim Gönderin',
+    uiWebMoreMenuHelpLink: 'Yardım',
+    uiWebSettingsPageTitle: 'Ayarlar',
+    uiWebSettingsHeaderTitle: 'Oyako çalışma ayarları',
+    uiWebKnowledgeBankHeaderTitle: 'Bilgi Bankası',
+    uiWebKnowledgeSourceHeaderTitle: 'Bilgi Kaynakları',
+    uiWebKnowledgeSourceHeaderMessage: 'Oyako, sorularınıza cevap verirken aşağıda gösterilen {sourceCount} adet bilgi kaynağını ve {documentCount} adet belgeyi kullanabilir.',
+    uiWebKnowledgeSourcesTableTitle: 'Şu kaynaklar kullanılabilir:',
+    uiWebKnowledgeDocumentsTableTitle: 'Şu belgeler kullanılabilir:',
+  }
   let bank = {
     sourceCount: 2,
     documentCount: 3,
@@ -196,6 +226,10 @@ export async function mockOyakoApi(page: Page) {
   await page.route('**/api/runtime/status**', async (route) => {
     // Awaits the asynchronous frontend operation before continuing.
     await route.fulfill({ json: statuses.shift() ?? readyStatus() })
+  })
+
+  await page.route('**/api/tenant-config', async (route) => {
+    await route.fulfill({ json: tenantConfig })
   })
 
   // Awaits the asynchronous frontend operation before continuing.

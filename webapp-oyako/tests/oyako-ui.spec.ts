@@ -51,7 +51,7 @@ test('main UI remains usable across core interactions', async ({ page }) => {
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('contentinfo')).toContainText('Uygulama Hazır')
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('contentinfo')).toContainText('Bilgi Bankası (2 Kaynak 3 Belge)')
+  await expect(page.getByRole('contentinfo')).toContainText('Bilgi Bankası')
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('button', { name: 'Yeni Sohbet' })).toBeVisible()
   // Awaits the asynchronous frontend operation before continuing.
@@ -86,7 +86,7 @@ test('visible interactive controls keep production-safe pointer target sizes', a
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: /Bilgi bankası/i }).click()
   // Awaits the asynchronous frontend operation before continuing.
-  await expectMinimumPointerTargets(page.getByRole('dialog', { name: /kullandığı bilgi kaynakları/i }))
+  await expectMinimumPointerTargets(page.getByRole('dialog', { name: /Bilgi Kaynakları/i }))
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('row', { name: /Yerel Dosyalar/ }).click()
   // Awaits the asynchronous frontend operation before continuing.
@@ -182,7 +182,7 @@ for (const viewport of overflowViewports) {
     // Awaits the asynchronous frontend operation before continuing.
     await page.getByRole('button', { name: /Bilgi bankası/i }).click()
     // Awaits the asynchronous frontend operation before continuing.
-    await expect(page.getByRole('dialog', { name: /kullandığı bilgi kaynakları/i })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: /Bilgi Kaynakları/i })).toBeVisible()
     const documentTableScroller = page
       .locator('section[aria-labelledby="knowledge-documents-title"] table.knowledge-table')
       .locator('xpath=ancestor::div[contains(@class, "knowledge-table-scroll")]')
@@ -294,11 +294,11 @@ test('floating surfaces close with Escape and restore focus to their trigger', a
   // Awaits the asynchronous frontend operation before continuing.
   await knowledgeButton.click()
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('dialog', { name: /kullandığı bilgi kaynakları/i })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: /Bilgi Kaynakları/i })).toBeVisible()
   // Awaits the asynchronous frontend operation before continuing.
   await page.keyboard.press('Escape')
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('dialog', { name: /kullandığı bilgi kaynakları/i })).toBeHidden()
+  await expect(page.getByRole('dialog', { name: /Bilgi Kaynakları/i })).toBeHidden()
   // Awaits the asynchronous frontend operation before continuing.
   await expect(knowledgeButton).toBeFocused()
 
@@ -366,9 +366,9 @@ test('knowledge bank renders source and document tables with actions', async ({ 
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: /Bilgi bankası/i }).click()
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('heading', { name: "Oyako'nun kullandığı bilgi kaynakları", level: 2, exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Bilgi Kaynakları', level: 2, exact: true })).toBeVisible()
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('heading', { name: "Oyako'nun cevap üretirken kullanabileceği belgeler", level: 3, exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Şu belgeler kullanılabilir:', level: 3, exact: true })).toBeVisible()
   const sourceTable = page.locator('section[aria-labelledby="knowledge-sources-title"] table.knowledge-table')
   const documentTable = page.locator('section[aria-labelledby="knowledge-documents-title"] table.knowledge-table')
   // Awaits the asynchronous frontend operation before continuing.

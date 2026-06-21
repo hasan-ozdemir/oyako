@@ -1,5 +1,13 @@
 const CACHE_NAME = 'oyako-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icons/oyako-icon.svg']
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icons/oyako-icon.svg',
+  '/tenants/oyakdijital/brand-logo.svg',
+  '/tenants/generictenant/brand-logo.svg',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

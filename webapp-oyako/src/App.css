@@ -402,9 +402,9 @@ body.oyako-modal-open {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #9f1718;
-  font-size: clamp(13px, 1.7vw, 18px);
+  font-size: 14px;
   font-weight: 950;
-  letter-spacing: 0.11em;
+  letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
 }

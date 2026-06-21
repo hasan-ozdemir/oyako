@@ -17,6 +17,7 @@ import type {
   QnaExperienceSettingsResponse,
   ReadyQuestionsResponse,
   RuntimeStatus,
+  TenantConfigResponse,
 } from '../types/chat'
 
 // Defines a reusable frontend value used by the surrounding module.
@@ -103,6 +104,22 @@ export async function fetchHealth(): Promise<HealthResponse> {
   }
 
   // Returns the value or JSX produced by this frontend workflow.
+  return response.json()
+}
+
+// Implements a frontend function that loads safe public tenant branding and runtime config.
+export async function fetchTenantConfig(): Promise<TenantConfigResponse> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/tenant-config`)
+  } catch {
+    throw new Error('Tenant yapılandırması alınamadı.')
+  }
+
+  if (!response.ok) {
+    throw new Error('Tenant yapılandırması alınamadı.')
+  }
+
   return response.json()
 }
 

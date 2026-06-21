@@ -1,7 +1,7 @@
 {
-  "name": "Oyako",
-  "short_name": "Oyako",
-  "description": "Oyak Dijital web kaynaklariyla beslenen tek sayfalik soru-cevap platformu.",
+  "name": "Soru-Cevap Platformu",
+  "short_name": "Soru-Cevap",
+  "description": "Kaynakli tek sayfalik soru-cevap platformu.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
