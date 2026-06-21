@@ -240,6 +240,37 @@ public static class ApiEndpoints
             }
         });
 
+        app.MapGet("/api/knowledge-refresh-settings", async (
+            IWebPageRepository webPageRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var settings = await webPageRepository.GetRefreshSettingsAsync(cancellationToken);
+            return Results.Ok(new KnowledgeRefreshSettingsResponse(
+                settings.RefreshPeriodValue,
+                settings.RefreshPeriodUnit,
+                settings.RefreshPeriodMinutes,
+                settings.UpdatedAtUtc));
+        });
+
+        app.MapPut("/api/knowledge-refresh-settings", async (
+            KnowledgeRefreshSettingsUpdateRequest request,
+            IWebPageRepository webPageRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var candidate = $"{request.RefreshPeriodValue}{request.RefreshPeriodUnit}";
+            if (!TenantRefreshPeriodParser.TryParseMinutes(candidate, out var minutes))
+            {
+                return Results.BadRequest(new { message = "Bilgi kaynağı yenilenme sıklığı geçersiz." });
+            }
+
+            var settings = await webPageRepository.UpdateRefreshSettingsAsync(minutes, cancellationToken);
+            return Results.Ok(new KnowledgeRefreshSettingsResponse(
+                settings.RefreshPeriodValue,
+                settings.RefreshPeriodUnit,
+                settings.RefreshPeriodMinutes,
+                settings.UpdatedAtUtc));
+        });
+
         // Registers or maps application behavior into the runtime pipeline.
         app.MapGet("/api/knowledge-source-refresh/status", async (
             IKnowledgeSourceRefreshService knowledgeSourceRefreshService,
@@ -1067,6 +1098,11 @@ public static class ApiEndpoints
                 source.StatusMessage,
                 BuildWebPageAdditionMode(source.SourceType),
                 BuildWebPageAdditionModeLabel(source.SourceType),
+                source.IsSeedManaged,
+                source.AutoRefreshEnabled,
+                source.RefreshPeriodMinutes,
+                source.LastRefreshAtUtc,
+                source.NextRefreshAtUtc,
                 source.DocumentCount,
                 source.ActiveDocumentCount,
                 source.LastCheckedAtUtc,

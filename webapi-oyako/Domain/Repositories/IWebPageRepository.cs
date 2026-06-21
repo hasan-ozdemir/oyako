@@ -10,6 +10,7 @@ public interface IWebPageRepository
     Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     Task<IReadOnlyList<KnowledgeSource>> GetSourcesAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(Array.Empty<KnowledgeSource>());
     Task<IReadOnlyList<KnowledgeSource>> GetActiveSourcesAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(Array.Empty<KnowledgeSource>());
+    Task<IReadOnlyList<KnowledgeSource>> GetDueSeedSourcesAsync(DateTime utcNow, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(Array.Empty<KnowledgeSource>());
     Task<KnowledgeSource?> GetSourceByIdAsync(int id, CancellationToken cancellationToken) => Task.FromResult<KnowledgeSource?>(null);
     Task<KnowledgeSource> AddSourceAsync(string sourceType, string name, string? description, string? address, CancellationToken cancellationToken) => throw new NotSupportedException("This repository implementation does not support source creation.");
     Task<KnowledgeSource> EnsureLocalSourceAsync(string tenantGuid, string tenantKnowledgeGuid, string knowledgeSourceGuid, string name, string? description, CancellationToken cancellationToken) => throw new NotSupportedException("This repository implementation does not support local source rebuild.");
@@ -32,6 +33,8 @@ public interface IWebPageRepository
     Task<KnowledgeDocumentContent?> GetDisplayableDocumentContentAsync(int documentId, CancellationToken cancellationToken) => Task.FromResult<KnowledgeDocumentContent?>(null);
     Task<IReadOnlyList<KnowledgeFolder>> GetFoldersAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<KnowledgeFolder>>(Array.Empty<KnowledgeFolder>());
     Task UpsertPagesAsync(IReadOnlyCollection<WebPage> pages, CancellationToken cancellationToken) => Task.CompletedTask;
+    Task<(int Added, int Updated, int Deleted, int Unchanged)> ReplaceWebCrawlDocumentsForSourceAsync(int sourceId, IReadOnlyCollection<WebPage> pages, DateTime refreshedAtUtc, CancellationToken cancellationToken) => Task.FromResult((0, 0, 0, 0));
+    Task UpdateSeedSourceRefreshStatusAsync(int sourceId, string statusCode, string statusLabel, string statusMessage, DateTime checkedAtUtc, DateTime nextRefreshAtUtc, bool markSuccessfulRefresh, CancellationToken cancellationToken) => Task.CompletedTask;
     Task<int> MarkMissingWebDocumentsForSourceAsync(int sourceId, IReadOnlyCollection<string> discoveredUrls, CancellationToken cancellationToken) => Task.FromResult(0);
     Task<bool> MarkDocumentInvalidAsync(int documentId, string statusCode, string statusLabel, string statusMessage, int? httpStatusCode, CancellationToken cancellationToken) => Task.FromResult(false);
     Task DeleteByUrlsAsync(IReadOnlyCollection<string> urls, CancellationToken cancellationToken) => Task.CompletedTask;
@@ -44,5 +47,7 @@ public interface IWebPageRepository
     Task<WebPage?> GetDocumentByIdAsync(int documentId, CancellationToken cancellationToken) => Task.FromResult<WebPage?>(null);
     Task<KnowledgeUploadSettings> GetUploadSettingsAsync(CancellationToken cancellationToken) => Task.FromResult(new KnowledgeUploadSettings());
     Task<KnowledgeUploadSettings> UpdateUploadSettingsAsync(KnowledgeUploadSettings settings, CancellationToken cancellationToken) => Task.FromResult(settings);
+    Task<KnowledgeRefreshSettings> GetRefreshSettingsAsync(CancellationToken cancellationToken) => Task.FromResult(new KnowledgeRefreshSettings(1, "hour", 60, DateTime.UtcNow));
+    Task<KnowledgeRefreshSettings> UpdateRefreshSettingsAsync(int refreshPeriodMinutes, CancellationToken cancellationToken) => Task.FromResult(new KnowledgeRefreshSettings(1, "hour", refreshPeriodMinutes, DateTime.UtcNow));
     Task<(string TenantGuid, string TenantKnowledgeGuid)> GetKnowledgeIdentityAsync(CancellationToken cancellationToken) => Task.FromResult((Guid.Empty.ToString("D"), Guid.Empty.ToString("D")));
 }

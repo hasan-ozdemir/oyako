@@ -38,6 +38,22 @@ public sealed class WebPageRepository : IWebPageRepository
         return rows.ToList();
     }
 
+    public async Task<IReadOnlyList<KnowledgeSource>> GetDueSeedSourcesAsync(DateTime utcNow, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<KnowledgeSource>(SourceSelectSql(@"
+            WHERE s.is_enabled = 1
+              AND s.is_archived = 0
+              AND s.source_type = 'web_site'
+              AND s.is_seed_managed = 1
+              AND s.auto_refresh_enabled = 1
+            GROUP BY s.id
+            ORDER BY s.next_refresh_at_utc ASC, s.name ASC, s.address ASC"));
+        return rows
+            .Where(source => source.NextRefreshAtUtc is null || source.NextRefreshAtUtc <= utcNow)
+            .ToList();
+    }
+
     public async Task<KnowledgeSource?> GetSourceByIdAsync(int id, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -185,6 +201,11 @@ public sealed class WebPageRepository : IWebPageRepository
             KnowledgeSourceTypes.WebLinks => $"web-links://source/{existing.KnowledgeSourceGuid}",
             _ => NormalizeAddress(address ?? existing.Address)
         };
+        if (existing.IsSeedManaged && !string.Equals(existing.Address, normalizedAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Seed bilgi kaynağı adresi tenant env dosyasından yönetilir.");
+        }
+
         var protocol = normalizedType switch
         {
             KnowledgeSourceTypes.LocalFiles => "local",
@@ -749,6 +770,264 @@ public sealed class WebPageRepository : IWebPageRepository
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task<(int Added, int Updated, int Deleted, int Unchanged)> ReplaceWebCrawlDocumentsForSourceAsync(
+        int sourceId,
+        IReadOnlyCollection<WebPage> pages,
+        DateTime refreshedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        if (pages.Count == 0)
+        {
+            throw new InvalidOperationException("Seed source refresh produced no documents.");
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var source = await GetSourceByIdAsync(connection, sourceId, transaction);
+        var existingDocuments = (await connection.QueryAsync<WebPage>(
+            $"{PageSelectSql} WHERE p.source_id = @SourceId AND p.origin = 'web_crawl';",
+            new { SourceId = sourceId },
+            transaction)).ToList();
+        var existingByUrl = existingDocuments.ToDictionary(document => NormalizeDocumentUrl(document.WebSourceUrl), StringComparer.OrdinalIgnoreCase);
+        var normalizedPages = new List<WebPage>();
+
+        await connection.ExecuteAsync("DROP TABLE IF EXISTS temp.oyako_refresh_stage_documents;", transaction: transaction);
+        await connection.ExecuteAsync(@"
+            CREATE TEMP TABLE oyako_refresh_stage_documents (
+                source_id INTEGER NOT NULL,
+                tenant_guid TEXT NOT NULL,
+                tenant_knowledge_guid TEXT NOT NULL,
+                knowledge_source_guid TEXT NOT NULL,
+                source_folder_guid TEXT NOT NULL,
+                folder_document_guid TEXT NOT NULL,
+                web_source_url TEXT NOT NULL,
+                web_title TEXT NULL,
+                web_content TEXT NOT NULL,
+                content_preview TEXT NOT NULL,
+                is_enabled INTEGER NOT NULL,
+                is_archived INTEGER NOT NULL,
+                status_code TEXT NOT NULL,
+                status_label TEXT NOT NULL,
+                status_message TEXT NOT NULL,
+                http_status_code INTEGER NULL,
+                preview_status TEXT NOT NULL,
+                preview_generated_at_utc TEXT NULL,
+                last_checked_at_utc TEXT NULL,
+                content_hash TEXT NOT NULL,
+                first_seen_at_utc TEXT NOT NULL,
+                last_seen_at_utc TEXT NOT NULL,
+                last_crawled_at_utc TEXT NOT NULL,
+                original_file_name TEXT NOT NULL,
+                normalized_relative_path TEXT NOT NULL,
+                normalized_folder_path TEXT NOT NULL,
+                storage_directory TEXT NOT NULL,
+                stored_file_name TEXT NOT NULL,
+                file_extension TEXT NOT NULL,
+                file_size_bytes INTEGER NOT NULL,
+                file_hash TEXT NOT NULL,
+                parse_status TEXT NOT NULL,
+                ocr_status TEXT NOT NULL,
+                origin TEXT NOT NULL
+            );", transaction: transaction);
+
+        foreach (var page in pages)
+        {
+            var normalizedUrl = NormalizeDocumentUrl(page.WebSourceUrl);
+            var title = string.IsNullOrWhiteSpace(page.WebTitle) ? BuildTitleFromUrl(normalizedUrl) : page.WebTitle!.Trim();
+            var content = NormalizeText(page.WebContent);
+            if (content.Length == 0)
+            {
+                continue;
+            }
+
+            var normalized = new WebPage
+            {
+                SourceId = source.Id,
+                SourceName = source.Name,
+                SourceType = source.SourceType,
+                TenantGuid = source.TenantGuid,
+                TenantKnowledgeGuid = source.TenantKnowledgeGuid,
+                KnowledgeSourceGuid = source.KnowledgeSourceGuid,
+                SourceFolderGuid = page.SourceFolderGuid,
+                FolderDocumentGuid = page.FolderDocumentGuid,
+                WebSourceUrl = normalizedUrl,
+                WebTitle = title,
+                WebContent = content,
+                ContentPreview = string.IsNullOrWhiteSpace(page.ContentPreview) ? EnsurePreview(content, title) : page.ContentPreview.Trim(),
+                IsEnabled = page.IsEnabled,
+                IsArchived = page.IsArchived,
+                StatusCode = string.IsNullOrWhiteSpace(page.StatusCode) ? "ok" : page.StatusCode,
+                StatusLabel = string.IsNullOrWhiteSpace(page.StatusLabel) ? "Tamam" : page.StatusLabel,
+                StatusMessage = string.IsNullOrWhiteSpace(page.StatusMessage) ? "Belge kullanılabilir." : page.StatusMessage,
+                HttpStatusCode = page.HttpStatusCode,
+                PreviewStatus = string.IsNullOrWhiteSpace(page.PreviewStatus) ? "scraped" : page.PreviewStatus,
+                PreviewGeneratedAtUtc = page.PreviewGeneratedAtUtc ?? refreshedAtUtc,
+                LastCheckedAtUtc = refreshedAtUtc,
+                ContentHash = string.IsNullOrWhiteSpace(page.ContentHash) ? CalculateHash(content) : page.ContentHash,
+                FirstSeenAtUtc = existingByUrl.TryGetValue(normalizedUrl, out var existing) ? existing.FirstSeenAtUtc : refreshedAtUtc,
+                LastSeenAtUtc = refreshedAtUtc,
+                LastCrawledAtUtc = refreshedAtUtc,
+                OriginalFileName = page.OriginalFileName,
+                NormalizedRelativePath = page.NormalizedRelativePath,
+                NormalizedFolderPath = page.NormalizedFolderPath,
+                StorageDirectory = page.StorageDirectory,
+                StoredFileName = page.StoredFileName,
+                FileExtension = page.FileExtension,
+                FileSizeBytes = page.FileSizeBytes,
+                FileHash = page.FileHash,
+                ParseStatus = page.ParseStatus,
+                OcrStatus = page.OcrStatus,
+                Origin = "web_crawl"
+            };
+
+            normalizedPages.Add(normalized);
+            await connection.ExecuteAsync(
+                @"INSERT INTO oyako_refresh_stage_documents (
+                    source_id, tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_folder_guid, folder_document_guid,
+                    web_source_url, web_title, web_content, content_preview, is_enabled, is_archived,
+                    status_code, status_label, status_message, http_status_code, preview_status, preview_generated_at_utc,
+                    last_checked_at_utc, content_hash, first_seen_at_utc, last_seen_at_utc, last_crawled_at_utc,
+                    original_file_name, normalized_relative_path, normalized_folder_path, storage_directory, stored_file_name,
+                    file_extension, file_size_bytes, file_hash, parse_status, ocr_status, origin)
+                  VALUES (
+                    @SourceId, @TenantGuid, @TenantKnowledgeGuid, @KnowledgeSourceGuid, @SourceFolderGuid, @FolderDocumentGuid,
+                    @WebSourceUrl, @WebTitle, @WebContent, @ContentPreview, @IsEnabled, @IsArchived,
+                    @StatusCode, @StatusLabel, @StatusMessage, @HttpStatusCode, @PreviewStatus, @PreviewGeneratedAtUtc,
+                    @LastCheckedAtUtc, @ContentHash, @FirstSeenAtUtc, @LastSeenAtUtc, @LastCrawledAtUtc,
+                    @OriginalFileName, @NormalizedRelativePath, @NormalizedFolderPath, @StorageDirectory, @StoredFileName,
+                    @FileExtension, @FileSizeBytes, @FileHash, @ParseStatus, @OcrStatus, @Origin);",
+                new
+                {
+                    SourceId = normalized.SourceId,
+                    normalized.TenantGuid,
+                    normalized.TenantKnowledgeGuid,
+                    normalized.KnowledgeSourceGuid,
+                    normalized.SourceFolderGuid,
+                    normalized.FolderDocumentGuid,
+                    normalized.WebSourceUrl,
+                    normalized.WebTitle,
+                    normalized.WebContent,
+                    normalized.ContentPreview,
+                    IsEnabled = normalized.IsEnabled ? 1 : 0,
+                    IsArchived = normalized.IsArchived ? 1 : 0,
+                    normalized.StatusCode,
+                    normalized.StatusLabel,
+                    normalized.StatusMessage,
+                    normalized.HttpStatusCode,
+                    normalized.PreviewStatus,
+                    normalized.PreviewGeneratedAtUtc,
+                    normalized.LastCheckedAtUtc,
+                    normalized.ContentHash,
+                    normalized.FirstSeenAtUtc,
+                    normalized.LastSeenAtUtc,
+                    normalized.LastCrawledAtUtc,
+                    normalized.OriginalFileName,
+                    normalized.NormalizedRelativePath,
+                    normalized.NormalizedFolderPath,
+                    normalized.StorageDirectory,
+                    normalized.StoredFileName,
+                    normalized.FileExtension,
+                    normalized.FileSizeBytes,
+                    normalized.FileHash,
+                    normalized.ParseStatus,
+                    normalized.OcrStatus,
+                    normalized.Origin
+                },
+                transaction);
+        }
+
+        if (normalizedPages.Count == 0)
+        {
+            throw new InvalidOperationException("Seed source refresh produced no usable documents.");
+        }
+
+        var normalizedUrls = normalizedPages.Select(page => page.WebSourceUrl).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = normalizedPages.Count(page => !existingByUrl.ContainsKey(page.WebSourceUrl));
+        var updated = normalizedPages.Count(page =>
+            existingByUrl.TryGetValue(page.WebSourceUrl, out var existing)
+            && (!string.Equals(existing.ContentHash, page.ContentHash, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(existing.StatusCode, page.StatusCode, StringComparison.OrdinalIgnoreCase)
+                || existing.HttpStatusCode != page.HttpStatusCode));
+        var unchanged = normalizedPages.Count(page =>
+            existingByUrl.TryGetValue(page.WebSourceUrl, out var existing)
+            && string.Equals(existing.ContentHash, page.ContentHash, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(existing.StatusCode, page.StatusCode, StringComparison.OrdinalIgnoreCase)
+            && existing.HttpStatusCode == page.HttpStatusCode);
+        var deleted = existingDocuments.Count(document => !normalizedUrls.Contains(NormalizeDocumentUrl(document.WebSourceUrl)));
+
+        await connection.ExecuteAsync(
+            "DELETE FROM web_pages WHERE source_id = @SourceId AND origin = 'web_crawl';",
+            new { SourceId = sourceId },
+            transaction);
+        await connection.ExecuteAsync(@"
+            INSERT INTO web_pages (
+                source_id, tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_folder_guid, folder_document_guid,
+                web_source_url, web_title, web_content, content_preview, is_enabled, is_archived,
+                status_code, status_label, status_message, http_status_code, preview_status, preview_generated_at_utc,
+                last_checked_at_utc, content_hash, first_seen_at_utc, last_seen_at_utc, last_crawled_at_utc,
+                original_file_name, normalized_relative_path, normalized_folder_path, storage_directory, stored_file_name,
+                file_extension, file_size_bytes, file_hash, parse_status, ocr_status, origin)
+            SELECT
+                source_id, tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_folder_guid, folder_document_guid,
+                web_source_url, web_title, web_content, content_preview, is_enabled, is_archived,
+                status_code, status_label, status_message, http_status_code, preview_status, preview_generated_at_utc,
+                last_checked_at_utc, content_hash, first_seen_at_utc, last_seen_at_utc, last_crawled_at_utc,
+                original_file_name, normalized_relative_path, normalized_folder_path, storage_directory, stored_file_name,
+                file_extension, file_size_bytes, file_hash, parse_status, ocr_status, origin
+            FROM oyako_refresh_stage_documents;",
+            transaction: transaction);
+
+        var nextRefreshAtUtc = refreshedAtUtc.AddMinutes(Math.Max(1, source.RefreshPeriodMinutes));
+        await connection.ExecuteAsync(
+            @"UPDATE knowledge_sources
+              SET status_code = 'ok',
+                  status_label = 'Tamam',
+                  status_message = 'Kaynak yenilendi.',
+                  last_checked_at_utc = @RefreshedAtUtc,
+                  last_refresh_at_utc = @RefreshedAtUtc,
+                  next_refresh_at_utc = @NextRefreshAtUtc,
+                  updated_at_utc = @RefreshedAtUtc
+              WHERE id = @SourceId;",
+            new { SourceId = sourceId, RefreshedAtUtc = refreshedAtUtc, NextRefreshAtUtc = nextRefreshAtUtc },
+            transaction);
+        await connection.ExecuteAsync("DROP TABLE IF EXISTS temp.oyako_refresh_stage_documents;", transaction: transaction);
+        await transaction.CommitAsync(cancellationToken);
+        return (added, updated, deleted, unchanged);
+    }
+
+    public async Task UpdateSeedSourceRefreshStatusAsync(
+        int sourceId,
+        string statusCode,
+        string statusLabel,
+        string statusMessage,
+        DateTime checkedAtUtc,
+        DateTime nextRefreshAtUtc,
+        bool markSuccessfulRefresh,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"UPDATE knowledge_sources
+              SET status_code = @StatusCode,
+                  status_label = @StatusLabel,
+                  status_message = @StatusMessage,
+                  last_checked_at_utc = @CheckedAtUtc,
+                  last_refresh_at_utc = CASE WHEN @MarkSuccessfulRefresh = 1 THEN @CheckedAtUtc ELSE last_refresh_at_utc END,
+                  next_refresh_at_utc = @NextRefreshAtUtc,
+                  updated_at_utc = @CheckedAtUtc
+              WHERE id = @SourceId AND is_seed_managed = 1;",
+            new
+            {
+                SourceId = sourceId,
+                StatusCode = statusCode,
+                StatusLabel = statusLabel,
+                StatusMessage = statusMessage,
+                CheckedAtUtc = checkedAtUtc,
+                NextRefreshAtUtc = nextRefreshAtUtc,
+                MarkSuccessfulRefresh = markSuccessfulRefresh ? 1 : 0
+            });
+    }
+
     public async Task<int> MarkMissingWebDocumentsForSourceAsync(int sourceId, IReadOnlyCollection<string> discoveredUrls, CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -1091,6 +1370,53 @@ public sealed class WebPageRepository : IWebPageRepository
         return normalized;
     }
 
+    public async Task<KnowledgeRefreshSettings> GetRefreshSettingsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        var row = await connection.QuerySingleAsync<(int RefreshPeriodMinutes, DateTime UpdatedAtUtc)>(@"
+            SELECT refresh_period_minutes AS RefreshPeriodMinutes,
+                   updated_at_utc AS UpdatedAtUtc
+            FROM knowledge_refresh_settings
+            WHERE id = 1;");
+        var (value, unit) = TenantRefreshPeriodParser.ToValueUnit(row.RefreshPeriodMinutes);
+        return new KnowledgeRefreshSettings(value, unit, row.RefreshPeriodMinutes, row.UpdatedAtUtc);
+    }
+
+    public async Task<KnowledgeRefreshSettings> UpdateRefreshSettingsAsync(int refreshPeriodMinutes, CancellationToken cancellationToken)
+    {
+        var (value, unit) = TenantRefreshPeriodParser.ToValueUnit(refreshPeriodMinutes);
+        var normalizedMinutes = unit switch
+        {
+            "minute" => value,
+            "hour" => value * 60,
+            "day" => value * 24 * 60,
+            "week" => value * 7 * 24 * 60,
+            _ => 60
+        };
+        var now = DateTime.UtcNow;
+        var nextRefresh = now.AddMinutes(normalizedMinutes);
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await connection.ExecuteAsync(
+            @"INSERT INTO knowledge_refresh_settings (id, refresh_period_minutes, updated_at_utc)
+              VALUES (1, @RefreshPeriodMinutes, @UpdatedAtUtc)
+              ON CONFLICT(id) DO UPDATE SET
+                refresh_period_minutes = excluded.refresh_period_minutes,
+                updated_at_utc = excluded.updated_at_utc;",
+            new { RefreshPeriodMinutes = normalizedMinutes, UpdatedAtUtc = now },
+            transaction);
+        await connection.ExecuteAsync(
+            @"UPDATE knowledge_sources
+              SET refresh_period_minutes = @RefreshPeriodMinutes,
+                  next_refresh_at_utc = @NextRefreshAtUtc,
+                  updated_at_utc = @UpdatedAtUtc
+              WHERE is_seed_managed = 1;",
+            new { RefreshPeriodMinutes = normalizedMinutes, NextRefreshAtUtc = nextRefresh, UpdatedAtUtc = now },
+            transaction);
+        await transaction.CommitAsync(cancellationToken);
+        return new KnowledgeRefreshSettings(value, unit, normalizedMinutes, now);
+    }
+
     public async Task<(string TenantGuid, string TenantKnowledgeGuid)> GetKnowledgeIdentityAsync(CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
@@ -1128,6 +1454,12 @@ public sealed class WebPageRepository : IWebPageRepository
                 s.status_label AS StatusLabel,
                 s.status_message AS StatusMessage,
                 s.last_checked_at_utc AS LastCheckedAtUtc,
+                s.is_seed_managed AS IsSeedManaged,
+                s.seed_key AS SeedKey,
+                s.refresh_period_minutes AS RefreshPeriodMinutes,
+                s.auto_refresh_enabled AS AutoRefreshEnabled,
+                s.last_refresh_at_utc AS LastRefreshAtUtc,
+                s.next_refresh_at_utc AS NextRefreshAtUtc,
                 s.created_at_utc AS CreatedAtUtc,
                 s.updated_at_utc AS UpdatedAtUtc,
                 COUNT(p.id) AS DocumentCount,

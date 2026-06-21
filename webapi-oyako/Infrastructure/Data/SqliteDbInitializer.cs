@@ -1,6 +1,8 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/Infrastructure/Data/SqliteDbInitializer.cs for maintainers.
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
 using webapi_oyako.Domain.Entities;
 using webapi_oyako.Infrastructure.Configuration;
 
@@ -10,9 +12,9 @@ namespace webapi_oyako.Infrastructure.Data;
 public sealed class SqliteDbInitializer
 {
     // Stores the current application version used by final-schema metadata.
-    public const string AppVersion = "v2026.6.18.300";
+    public const string AppVersion = "v2026.6.21.400";
     // Stores the schema version that represents this aggressive cutover.
-    private const string SchemaVersion = "v2026.6.18.300-primary";
+    private const string SchemaVersion = "v2026.6.21.400-tenant-seed-refresh";
 
     private readonly SqliteOptions _options;
     private readonly AiOptions _aiOptions;
@@ -90,6 +92,7 @@ public sealed class SqliteDbInitializer
             "knowledge_sources",
             "knowledge_document_cache_blocks",
             "knowledge_upload_settings",
+            "knowledge_refresh_settings",
             "knowledge_bank_metadata",
             "tenant_metadata",
             "system_instruction_cache",
@@ -153,6 +156,12 @@ public sealed class SqliteDbInitializer
                 status_label TEXT NOT NULL DEFAULT 'Tamam',
                 status_message TEXT NOT NULL DEFAULT 'Kaynak kullanılabilir.',
                 last_checked_at_utc TEXT NULL,
+                is_seed_managed INTEGER NOT NULL DEFAULT 0,
+                seed_key TEXT NOT NULL DEFAULT '',
+                refresh_period_minutes INTEGER NOT NULL DEFAULT 60,
+                auto_refresh_enabled INTEGER NOT NULL DEFAULT 0,
+                last_refresh_at_utc TEXT NULL,
+                next_refresh_at_utc TEXT NULL,
                 created_at_utc TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
             );
@@ -311,6 +320,12 @@ public sealed class SqliteDbInitializer
                 updated_at_utc TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS knowledge_refresh_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                refresh_period_minutes INTEGER NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS qna_experience_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 displayed_ready_question_count INTEGER NOT NULL CHECK(displayed_ready_question_count BETWEEN 1 AND 10),
@@ -325,6 +340,7 @@ public sealed class SqliteDbInitializer
             CREATE INDEX IF NOT EXISTS idx_web_pages_active_lookup ON web_pages(source_id, is_enabled, is_archived, status_code);
             CREATE INDEX IF NOT EXISTS idx_web_pages_local_identity ON web_pages(source_id, normalized_folder_path, normalized_relative_path);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_address ON knowledge_sources(address);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_seed_key ON knowledge_sources(seed_key) WHERE seed_key <> '';
             CREATE INDEX IF NOT EXISTS idx_knowledge_sources_active_lookup ON knowledge_sources(is_enabled, is_archived, source_type);
             CREATE INDEX IF NOT EXISTS idx_document_cache_blocks_source ON knowledge_document_cache_blocks(source_id, content_hash);
             CREATE INDEX IF NOT EXISTS idx_ready_questions_rotation ON ready_questions(served_count, last_served_at_utc);
@@ -338,20 +354,22 @@ public sealed class SqliteDbInitializer
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    // Seeds tenant, knowledge bank, default web source, upload settings, and AI settings.
+    // Seeds tenant, knowledge bank, tenant env seed sources, upload settings, and AI settings.
     private async Task SeedRequiredDataAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
+        if (_tenantOptions.KnowledgeSources.Count == 0)
+        {
+            throw new InvalidOperationException("Tenant configuration must declare at least one tenant knowledge source before SQLite can be initialized.");
+        }
+
         var now = DateTime.UtcNow.ToString("O");
-        var tenantGuid = string.IsNullOrWhiteSpace(_tenantOptions.Id) ? Guid.NewGuid().ToString("D") : _tenantOptions.Id.Trim();
-        var tenantDisplayName = string.IsNullOrWhiteSpace(_tenantOptions.DisplayName) ? "Oyako Tenant" : _tenantOptions.DisplayName.Trim();
-        var knowledgeBankName = string.IsNullOrWhiteSpace(_tenantOptions.UiWebKnowledgeBankHeaderTitle)
-            ? $"{tenantDisplayName} Bilgi Bankası"
-            : _tenantOptions.UiWebKnowledgeBankHeaderTitle.Trim();
-        var knowledgeGuid = Guid.NewGuid().ToString("D");
-        var webSourceGuid = Guid.NewGuid().ToString("D");
-        var sourceUri = new Uri(string.IsNullOrWhiteSpace(_tenantOptions.WebUrl) ? "https://www.oyakdijital.com.tr" : _tenantOptions.WebUrl.Trim());
-        var sourceAddress = $"{sourceUri.Scheme}://{sourceUri.Host}";
-        var sourceDescription = $"{tenantDisplayName} web sitesi ana bilgi kaynağı.";
+        var tenantGuid = _tenantOptions.Id.Trim();
+        var tenantDisplayName = _tenantOptions.DisplayName.Trim();
+        var knowledgeBankName = _tenantOptions.UiWebKnowledgeBankHeaderTitle.Trim();
+        var knowledgeGuid = BuildDeterministicGuid($"{tenantGuid}:knowledge-bank");
+        var defaultRefreshPeriodMinutes = TenantRefreshPeriodParser.TryParseMinutes(_tenantOptions.KnowledgeSources[0].RefreshPeriod, out var parsedRefreshPeriod)
+            ? parsedRefreshPeriod
+            : 60;
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
@@ -369,31 +387,15 @@ public sealed class SqliteDbInitializer
 
             INSERT INTO knowledge_bank_metadata (id, tenant_guid, tenant_knowledge_guid, name, version, created_at_utc, updated_at_utc)
             VALUES (1, (SELECT tenant_guid FROM tenant_metadata WHERE id = 1), $knowledgeGuid, $knowledgeBankName, $appVersion, $now, $now)
-            ON CONFLICT(id) DO UPDATE SET tenant_guid = excluded.tenant_guid, name = excluded.name, version = excluded.version, updated_at_utc = excluded.updated_at_utc;
-
-            INSERT INTO knowledge_sources (
-                tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_type, name, description, address, protocol,
-                is_enabled, is_archived, status_code, status_label, status_message, created_at_utc, updated_at_utc)
-            SELECT (SELECT tenant_guid FROM tenant_metadata WHERE id = 1),
-                   (SELECT tenant_knowledge_guid FROM knowledge_bank_metadata WHERE id = 1),
-                   $webSourceGuid,
-                   $sourceType,
-                   $sourceName,
-                   $sourceDescription,
-                   $address,
-                   $protocol,
-                   1,
-                   0,
-                   'ok',
-                   'Tamam',
-                   'Kaynak kullanılabilir.',
-                   $now,
-                   $now
-            WHERE NOT EXISTS (SELECT 1 FROM knowledge_sources WHERE address = $address);
+            ON CONFLICT(id) DO UPDATE SET tenant_guid = excluded.tenant_guid, tenant_knowledge_guid = excluded.tenant_knowledge_guid, name = excluded.name, version = excluded.version, updated_at_utc = excluded.updated_at_utc;
 
             INSERT INTO knowledge_upload_settings (id, max_file_size_mb, max_batch_file_count, max_batch_size_mb, updated_at_utc)
             SELECT 1, 25, 100, 250, $now
             WHERE NOT EXISTS (SELECT 1 FROM knowledge_upload_settings WHERE id = 1);
+
+            INSERT INTO knowledge_refresh_settings (id, refresh_period_minutes, updated_at_utc)
+            SELECT 1, $defaultRefreshPeriodMinutes, $now
+            WHERE NOT EXISTS (SELECT 1 FROM knowledge_refresh_settings WHERE id = 1);
 
             INSERT INTO ai_settings (id, active_provider, azure_model, ollama_local_model, ollama_cloud_model, updated_at_utc)
             SELECT 1, $activeProvider, $azureModel, $ollamaLocalModel, $ollamaCloudModel, $now
@@ -411,18 +413,125 @@ public sealed class SqliteDbInitializer
         command.Parameters.AddWithValue("$tenantName", tenantDisplayName);
         command.Parameters.AddWithValue("$knowledgeBankName", knowledgeBankName);
         command.Parameters.AddWithValue("$knowledgeGuid", knowledgeGuid);
-        command.Parameters.AddWithValue("$webSourceGuid", webSourceGuid);
-        command.Parameters.AddWithValue("$sourceType", KnowledgeSourceTypes.WebSite);
-        command.Parameters.AddWithValue("$sourceName", tenantDisplayName);
-        command.Parameters.AddWithValue("$sourceDescription", sourceDescription);
-        command.Parameters.AddWithValue("$address", sourceAddress);
-        command.Parameters.AddWithValue("$protocol", sourceUri.Scheme);
+        command.Parameters.AddWithValue("$defaultRefreshPeriodMinutes", defaultRefreshPeriodMinutes);
         command.Parameters.AddWithValue("$activeProvider", string.IsNullOrWhiteSpace(_aiOptions.DefaultProvider) ? "ollama-cloud" : _aiOptions.DefaultProvider);
         command.Parameters.AddWithValue("$azureModel", _azureAiOptions.DeploymentName);
         command.Parameters.AddWithValue("$ollamaLocalModel", _ollamaLocalOptions.Model);
         command.Parameters.AddWithValue("$ollamaCloudModel", _ollamaCloudOptions.Model);
         command.Parameters.AddWithValue("$now", now);
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        await SeedTenantKnowledgeSourcesAsync(connection, tenantDisplayName, now, cancellationToken);
+    }
+
+    private async Task SeedTenantKnowledgeSourcesAsync(SqliteConnection connection, string tenantDisplayName, string now, CancellationToken cancellationToken)
+    {
+        var seedKeys = new List<string>();
+        foreach (var source in _tenantOptions.KnowledgeSources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var seedKey = string.IsNullOrWhiteSpace(source.Key) ? $"source_{seedKeys.Count + 1}" : source.Key.Trim();
+            seedKeys.Add(seedKey);
+
+            var sourceUri = new Uri(source.Url.Trim());
+            var address = BuildCanonicalSourceAddress(sourceUri);
+            var name = string.IsNullOrWhiteSpace(source.Name) ? tenantDisplayName : source.Name.Trim();
+            var description = string.IsNullOrWhiteSpace(source.Description)
+                ? $"{tenantDisplayName} seed web sitesi bilgi kaynağı."
+                : source.Description.Trim();
+            var sourceGuid = BuildDeterministicGuid($"{_tenantOptions.Id}:{seedKey}:{address}");
+            TenantRefreshPeriodParser.TryParseMinutes(source.RefreshPeriod, out var refreshPeriodMinutes);
+            refreshPeriodMinutes = refreshPeriodMinutes <= 0 ? 60 : refreshPeriodMinutes;
+            var nextRefreshAtUtc = DateTime.UtcNow.ToString("O");
+
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                UPDATE knowledge_sources
+                SET
+                    tenant_guid = (SELECT tenant_guid FROM tenant_metadata WHERE id = 1),
+                    tenant_knowledge_guid = (SELECT tenant_knowledge_guid FROM knowledge_bank_metadata WHERE id = 1),
+                    knowledge_source_guid = $sourceGuid,
+                    source_type = $sourceType,
+                    name = $sourceName,
+                    description = $sourceDescription,
+                    address = $address,
+                    protocol = $protocol,
+                    is_enabled = $isEnabled,
+                    is_archived = 0,
+                    status_code = 'ok',
+                    status_label = 'Tamam',
+                    status_message = 'Kaynak kullanılabilir.',
+                    is_seed_managed = 1,
+                    seed_key = $seedKey,
+                    refresh_period_minutes = $refreshPeriodMinutes,
+                    auto_refresh_enabled = $autoRefreshEnabled,
+                    next_refresh_at_utc = COALESCE(next_refresh_at_utc, $nextRefreshAtUtc),
+                    updated_at_utc = $now
+                WHERE seed_key = $seedKey OR address = $address;
+
+                INSERT INTO knowledge_sources (
+                    tenant_guid, tenant_knowledge_guid, knowledge_source_guid, source_type, name, description, address, protocol,
+                    is_enabled, is_archived, status_code, status_label, status_message,
+                    is_seed_managed, seed_key, refresh_period_minutes, auto_refresh_enabled, next_refresh_at_utc,
+                    created_at_utc, updated_at_utc)
+                SELECT
+                    (SELECT tenant_guid FROM tenant_metadata WHERE id = 1),
+                    (SELECT tenant_knowledge_guid FROM knowledge_bank_metadata WHERE id = 1),
+                    $sourceGuid,
+                    $sourceType,
+                    $sourceName,
+                    $sourceDescription,
+                    $address,
+                    $protocol,
+                    $isEnabled,
+                    0,
+                    'ok',
+                    'Tamam',
+                    'Kaynak kullanılabilir.',
+                    1,
+                    $seedKey,
+                    $refreshPeriodMinutes,
+                    $autoRefreshEnabled,
+                    $nextRefreshAtUtc,
+                    $now,
+                    $now
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM knowledge_sources
+                    WHERE seed_key = $seedKey OR address = $address
+                );";
+            command.Parameters.AddWithValue("$sourceGuid", sourceGuid);
+            command.Parameters.AddWithValue("$sourceType", KnowledgeSourceTypes.WebSite);
+            command.Parameters.AddWithValue("$sourceName", name);
+            command.Parameters.AddWithValue("$sourceDescription", description);
+            command.Parameters.AddWithValue("$address", address);
+            command.Parameters.AddWithValue("$protocol", sourceUri.Scheme.ToLowerInvariant());
+            command.Parameters.AddWithValue("$isEnabled", source.Enabled ? 1 : 0);
+            command.Parameters.AddWithValue("$seedKey", seedKey);
+            command.Parameters.AddWithValue("$refreshPeriodMinutes", refreshPeriodMinutes);
+            command.Parameters.AddWithValue("$autoRefreshEnabled", source.Enabled ? 1 : 0);
+            command.Parameters.AddWithValue("$nextRefreshAtUtc", nextRefreshAtUtc);
+            command.Parameters.AddWithValue("$now", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var safeSeedKeys = string.Join(", ", seedKeys.Select(key => $"'{key.Replace("'", "''", StringComparison.Ordinal)}'"));
+        await connection.ExecuteNonQueryAsync(
+            $"UPDATE knowledge_sources SET is_enabled = 0, is_archived = 1, auto_refresh_enabled = 0, updated_at_utc = '{now.Replace("'", "''", StringComparison.Ordinal)}' WHERE is_seed_managed = 1 AND seed_key NOT IN ({safeSeedKeys});",
+            cancellationToken);
+    }
+
+    private static string BuildCanonicalSourceAddress(Uri uri)
+    {
+        var host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+        var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
+        return $"{uri.Scheme.ToLowerInvariant()}://{host.ToLowerInvariant()}{port}";
+    }
+
+    private static string BuildDeterministicGuid(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return new Guid(bytes.Take(16).ToArray()).ToString("D");
     }
 
     // Drops only the AI settings table when it still has the retired single-Ollama provider schema.

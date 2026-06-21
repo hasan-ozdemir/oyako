@@ -34,6 +34,18 @@ public sealed class KnowledgeSource
     public string StatusMessage { get; set; } = "Kaynak kullanılabilir.";
     // Stores the last time the source was checked.
     public DateTime? LastCheckedAtUtc { get; set; }
+    // Identifies seed sources declared by the active tenant env file.
+    public bool IsSeedManaged { get; set; }
+    // Stores the stable tenant env source key such as source_1.
+    public string SeedKey { get; set; } = string.Empty;
+    // Stores the automatic refresh period for seed-managed sources.
+    public int RefreshPeriodMinutes { get; set; } = 60;
+    // Controls whether the background worker refreshes this source.
+    public bool AutoRefreshEnabled { get; set; }
+    // Stores the last successful automatic refresh time.
+    public DateTime? LastRefreshAtUtc { get; set; }
+    // Stores when the source should next be refreshed.
+    public DateTime? NextRefreshAtUtc { get; set; }
     // Stores the creation timestamp.
     public DateTime CreatedAtUtc { get; set; }
     // Stores the latest update timestamp.

@@ -41,7 +41,7 @@ public sealed class KnowledgeSourceRefreshHostedService : BackgroundService
             await DelayWithJitterAsync(stoppingToken);
             await RefreshAsync(stoppingToken);
 
-            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(Math.Max(1, _options.SourceRefreshIntervalMinutes)));
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 await DelayWithJitterAsync(stoppingToken);

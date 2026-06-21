@@ -142,6 +142,18 @@ public sealed record QnaExperienceSettingsUpdateRequest(
     bool AutoSubmitPromptButtons,
     bool ShowAnswerSourceDocumentNames);
 
+// Defines the immutable KnowledgeRefreshSettingsResponse data shape exchanged between Oyako components.
+public sealed record KnowledgeRefreshSettingsResponse(
+    int RefreshPeriodValue,
+    string RefreshPeriodUnit,
+    int RefreshPeriodMinutes,
+    DateTime UpdatedAtUtc);
+
+// Defines the immutable KnowledgeRefreshSettingsUpdateRequest data shape exchanged between Oyako components.
+public sealed record KnowledgeRefreshSettingsUpdateRequest(
+    int RefreshPeriodValue,
+    string RefreshPeriodUnit);
+
 // Defines the immutable CrawlStatusResponse data shape exchanged between Oyako components.
 public sealed record CrawlStatusResponse(
     int? Id,
@@ -188,6 +200,11 @@ public sealed record KnowledgeBankSourceResponse(
     string StatusMessage,
     string WebPageAdditionMode,
     string WebPageAdditionModeLabel,
+    bool IsSeedManaged,
+    bool AutoRefreshEnabled,
+    int RefreshPeriodMinutes,
+    DateTime? LastRefreshAtUtc,
+    DateTime? NextRefreshAtUtc,
     int DocumentCount,
     int ActiveDocumentCount,
     DateTime? LastCheckedAtUtc,

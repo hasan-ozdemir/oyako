@@ -20,6 +20,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
     private readonly IWebPageRepository _webPageRepository;
     // Stores state or a dependency required by the surrounding component.
     private readonly ICrawlRunRepository _crawlRunRepository;
+    private readonly IKnowledgeStoreMaintenanceRepository _maintenanceRepository;
     // Stores state or a dependency required by the surrounding component.
     private readonly ISystemInstructionCache _systemInstructionCache;
     // Stores state or a dependency required by the surrounding component.
@@ -36,6 +37,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
         IWebCrawler crawler,
         IWebPageRepository webPageRepository,
         ICrawlRunRepository crawlRunRepository,
+        IKnowledgeStoreMaintenanceRepository maintenanceRepository,
         ISystemInstructionCache systemInstructionCache,
         IReadyQuestionService readyQuestionService,
         IKnowledgeOperationGate operationGate,
@@ -45,6 +47,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
         _crawler = crawler;
         _webPageRepository = webPageRepository;
         _crawlRunRepository = crawlRunRepository;
+        _maintenanceRepository = maintenanceRepository;
         _systemInstructionCache = systemInstructionCache;
         _readyQuestionService = readyQuestionService;
         _operationGate = operationGate;
@@ -76,7 +79,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
         int? runId = null;
         try
         {
-            var sources = await _webPageRepository.GetActiveSourcesAsync(cancellationToken);
+            var sources = await _webPageRepository.GetDueSeedSourcesAsync(DateTime.UtcNow, cancellationToken);
             runId = await _crawlRunRepository.StartAsync(startedAt, cancellationToken);
             var results = new List<KnowledgeSourceRefreshResult>();
 
@@ -91,17 +94,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
             var deleted = results.Sum(result => result.DeletedCount);
             var unchanged = results.Sum(result => result.UnchangedCount);
             var failed = results.Sum(result => result.FailedDocumentCount);
-            var changed = results.Any(result => result.Changed);
-            var cacheActivated = false;
-
-            if (changed)
-            {
-                cacheActivated = await _systemInstructionCache.RefreshIfChangedAsync(cancellationToken);
-                if (cacheActivated)
-                {
-                    _readyQuestionService.QueueRefreshFromKnowledge();
-                }
-            }
+            var cacheActivated = results.Any(result => result.Changed);
 
             var failedSourceCount = results.Count(result => result.Status == "failed");
             var warningSourceCount = results.Count(result => result.Status is "warning" or "unreachable");
@@ -135,7 +128,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
                 failed,
                 cacheActivated,
                 results,
-                changed ? "Knowledge source refresh tamamlandı ve bilgi önbelleği kontrol edildi." : "Knowledge source refresh tamamlandı; değişiklik bulunmadı.");
+                cacheActivated ? "Seed knowledge source refresh tamamlandı ve bilgi önbelleği güncellendi." : "Seed knowledge source refresh tamamlandı; değişiklik bulunmadı.");
         }
         catch (Exception ex)
         {
@@ -184,11 +177,14 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
     private async Task<KnowledgeSourceRefreshResult> RefreshSourceAsync(KnowledgeSource source, CancellationToken cancellationToken)
     {
         var startedAt = DateTime.UtcNow;
+        var backupSetId = BuildBackupSetId(source.Id);
+        var backupCreated = false;
         try
         {
             var result = await CrawlWithRetryAsync(source, cancellationToken);
             if (IsSourceUnreachable(result))
             {
+                await ScheduleNextAttemptAsync(source, "unreachable", "Ulaşılamadı", "Kaynağa ulaşılamadı; mevcut belgeler korundu.", cancellationToken);
                 _logger.LogWarning("knowledge-source-refresh preserved existing documents because source {SourceId} was unreachable.", source.Id);
                 return new KnowledgeSourceRefreshResult(
                     source.Id,
@@ -207,6 +203,7 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
 
             if (result.Pages.Count == 0)
             {
+                await ScheduleNextAttemptAsync(source, "warning", "Uyarı", "Kaynak erişilebilir görünüyor ancak yenilenecek belge üretmedi.", cancellationToken);
                 return new KnowledgeSourceRefreshResult(
                     source.Id,
                     source.Name,
@@ -222,48 +219,34 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
                     "Kaynak erişilebilir görünüyor ancak yenilenecek belge üretmedi.");
             }
 
-            var existingDocuments = await _webPageRepository.GetDocumentsBySourceAsync(source.Id, cancellationToken);
-            var existingByUrl = existingDocuments.ToDictionary(document => document.WebSourceUrl, StringComparer.OrdinalIgnoreCase);
             var pages = result.Pages.ToList();
             var pagesToPersist = pages
                 .Where(page => page.HttpStatusCode is not 404 and not 410)
                 .ToList();
-            var added = 0;
-            var updated = 0;
-            var unchanged = 0;
 
-            foreach (var page in pagesToPersist)
-            {
-                if (!existingByUrl.TryGetValue(page.WebSourceUrl, out var existing))
-                {
-                    added++;
-                    continue;
-                }
-
-                if (!string.Equals(existing.ContentHash, page.ContentHash, StringComparison.OrdinalIgnoreCase)
-                    || !string.Equals(existing.StatusCode, page.StatusCode, StringComparison.OrdinalIgnoreCase)
-                    || existing.HttpStatusCode != page.HttpStatusCode)
-                {
-                    updated++;
-                }
-                else
-                {
-                    unchanged++;
-                }
-            }
-
-            await _webPageRepository.UpsertPagesAsync(pagesToPersist, cancellationToken);
-            var deleted = await _webPageRepository.MarkMissingWebDocumentsForSourceAsync(
+            await _maintenanceRepository.BackupAsync(backupSetId, cancellationToken);
+            backupCreated = true;
+            var (added, updated, deleted, unchanged) = await _webPageRepository.ReplaceWebCrawlDocumentsForSourceAsync(
                 source.Id,
-                pagesToPersist.Select(page => page.WebSourceUrl).ToArray(),
+                pagesToPersist,
+                DateTime.UtcNow,
                 cancellationToken);
             var failed = pages.Count(page => page.StatusCode != "ok");
             var changed = added + updated + deleted > 0;
             var hasSourceLevelCrawlerErrors = !result.IsSuccessful && result.Errors.Count > 0;
+            if (changed)
+            {
+                if (await _systemInstructionCache.RefreshIfChangedAsync(cancellationToken))
+                {
+                    _readyQuestionService.QueueRefreshFromKnowledge();
+                }
+            }
+
+            await _maintenanceRepository.CleanupBackupsExceptAsync(backupSetId, cancellationToken);
             var completionMessage = hasSourceLevelCrawlerErrors
                 ? string.Join(" | ", result.Errors.Take(3))
                 : changed
-                    ? "Kaynak belgeleri güncellendi."
+                    ? "Kaynak belgeleri atomik staging refresh ile güncellendi."
                     : "Kaynakta değişiklik bulunmadı.";
 
             return new KnowledgeSourceRefreshResult(
@@ -283,6 +266,21 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
         catch (Exception ex)
         {
             _logger.LogError(ex, "knowledge-source-refresh failed for source {SourceId}.", source.Id);
+            if (backupCreated)
+            {
+                try
+                {
+                    await _maintenanceRepository.RestoreAsync(backupSetId, CancellationToken.None);
+                    await _systemInstructionCache.ReloadFromStoreAsync(CancellationToken.None);
+                    await _maintenanceRepository.CleanupBackupsExceptAsync(backupSetId, CancellationToken.None);
+                }
+                catch (Exception restoreEx)
+                {
+                    _logger.LogError(restoreEx, "knowledge-source-refresh restore failed for source {SourceId}.", source.Id);
+                }
+            }
+
+            await ScheduleNextAttemptAsync(source, "failed", "Hata", ex.Message, CancellationToken.None);
             return new KnowledgeSourceRefreshResult(
                 source.Id,
                 source.Name,
@@ -297,6 +295,26 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
                 false,
                 ex.Message);
         }
+    }
+
+    private async Task ScheduleNextAttemptAsync(
+        KnowledgeSource source,
+        string statusCode,
+        string statusLabel,
+        string statusMessage,
+        CancellationToken cancellationToken)
+    {
+        var checkedAtUtc = DateTime.UtcNow;
+        var nextRefreshAtUtc = checkedAtUtc.AddMinutes(Math.Max(1, source.RefreshPeriodMinutes));
+        await _webPageRepository.UpdateSeedSourceRefreshStatusAsync(
+            source.Id,
+            statusCode,
+            statusLabel,
+            statusMessage,
+            checkedAtUtc,
+            nextRefreshAtUtc,
+            markSuccessfulRefresh: false,
+            cancellationToken);
     }
 
     // Crawls a source with retry for transient network and HTTP failures.
@@ -352,5 +370,10 @@ public sealed class KnowledgeSourceRefreshService : IKnowledgeSourceRefreshServi
         var exponentialSeconds = Math.Min(60, baseSeconds * Math.Pow(2, attempt));
         var jitterMilliseconds = Random.Shared.Next(100, 1000);
         return TimeSpan.FromSeconds(exponentialSeconds) + TimeSpan.FromMilliseconds(jitterMilliseconds);
+    }
+
+    private static string BuildBackupSetId(int sourceId)
+    {
+        return $"ksr_{sourceId}_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
     }
 }

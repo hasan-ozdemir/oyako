@@ -63,7 +63,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "knowledge_sources"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal("https://www.oyakdijital.com.tr", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
+            Assert.Equal("https://oyakdijital.com.tr", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "ai_settings"));
             // Verifies the expected behavior for this test scenario.
@@ -111,6 +111,34 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             Assert.Equal(3, reloaded.DisplayedSuggestedQuestionCount);
             Assert.False(reloaded.AutoSubmitPromptButtons);
             Assert.False(reloaded.ShowAnswerSourceDocumentNames);
+        }
+        finally
+        {
+            TryDelete(database.Path);
+        }
+    }
+
+    [Fact]
+    public async Task WebPageRepository_UpdateRefreshSettingsAsync_PersistsCadenceAndUpdatesSeedSources()
+    {
+        var database = await CreateDatabaseAsync();
+        try
+        {
+            var repository = new WebPageRepository(database.Options);
+
+            var initial = await repository.GetRefreshSettingsAsync(CancellationToken.None);
+            var updated = await repository.UpdateRefreshSettingsAsync(2 * 24 * 60, CancellationToken.None);
+            var reloaded = await repository.GetRefreshSettingsAsync(CancellationToken.None);
+
+            Assert.Equal(1, initial.RefreshPeriodValue);
+            Assert.Equal("hour", initial.RefreshPeriodUnit);
+            Assert.Equal(60, initial.RefreshPeriodMinutes);
+            Assert.Equal(2, updated.RefreshPeriodValue);
+            Assert.Equal("day", updated.RefreshPeriodUnit);
+            Assert.Equal(2 * 24 * 60, updated.RefreshPeriodMinutes);
+            Assert.Equal(updated, reloaded);
+            Assert.Equal(2 * 24 * 60, await FirstLongAsync(database.ConnectionString, "knowledge_sources", "refresh_period_minutes"));
+            Assert.NotNull(await FirstTextAsync(database.ConnectionString, "knowledge_sources", "next_refresh_at_utc"));
         }
         finally
         {
@@ -457,13 +485,47 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Creates the object needed for the next step of the workflow.
             Options.Create(new OllamaLocalOptions { Model = "gemma4:12b" }),
             Options.Create(new OllamaCloudOptions { Model = "minimax-m3:cloud" }),
-            Options.Create(new TenantOptions()));
+            Options.Create(CreateTestTenantOptions()));
 
         // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
         await initializer.InitializeAsync(CancellationToken.None);
         // Returns the computed result to the caller and completes this branch of the workflow.
         return new TestDatabase(path, connectionString, sqliteOptions);
     }
+
+    private static TenantOptions CreateTestTenantOptions() => new()
+    {
+        Id = "013dfb35-0ed6-4e32-4a80-5eae86646ddf",
+        OrderNumber = 1,
+        Name = "oyakdijital",
+        DisplayName = "Oyak Dijital",
+        AzureDomainName = "oyako",
+        WebUrl = "https://www.oyakdijital.com.tr",
+        AdminEmail = "admin@oyakdijital.com.tr",
+        FeedbackEmail = "iletisim@oyakdijital.com.tr",
+        UiWebBrandName = "Oyak Dijital",
+        UiWebAssistantName = "Oyako",
+        UiWebTitle = "Oyako: Oyak Dijital Soru-Cevap Platformu",
+        UiWebHeaderTitle = "Oyak Dijital soru-cevap platformu",
+        UiWebBrandLogoUrl = "https://www.oyakdijital.com.tr/logo.svg",
+        UiWebAssistantWelcomeMessage = "Merhaba, ben Oyako.",
+        UiWebAssistantHeaderTitle = "Oyak Dijital hakkında sorun:",
+        UiWebKnowledgeBankHeaderTitle = "Bilgi Bankası",
+        UiWebKnowledgeSourceHeaderTitle = "Bilgi Kaynakları",
+        UiWebKnowledgeSourceHeaderMessage = "Aşağıda {sourceCount} kaynak ve {documentCount} belge var.",
+        UiWebKnowledgeSourcesTableTitle = "Şu kaynaklar kullanılabilir:",
+        UiWebKnowledgeDocumentsTableTitle = "Şu belgeler kullanılabilir:",
+        KnowledgeSources =
+        [
+            new TenantKnowledgeSourceOptions
+            {
+                Key = "source_1",
+                Type = "web_site",
+                Url = "https://www.oyakdijital.com.tr",
+                RefreshPeriod = "1hour"
+            }
+        ]
+    };
 
     // Executes this component behavior as part of the Oyako application flow.
     private static async Task SeedKnowledgeRowsAsync(string connectionString)
@@ -671,6 +733,15 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
         command.CommandText = $"SELECT {columnName} FROM {tableName} LIMIT 1;";
         // Returns the computed result to the caller and completes this branch of the workflow.
         return (string?)await command.ExecuteScalarAsync();
+    }
+
+    private static async Task<long> FirstLongAsync(string connectionString, string tableName, string columnName)
+    {
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {columnName} FROM {tableName} LIMIT 1;";
+        return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 
     // Executes this component behavior as part of the Oyako application flow.

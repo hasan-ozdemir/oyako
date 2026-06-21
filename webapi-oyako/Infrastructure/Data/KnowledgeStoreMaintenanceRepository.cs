@@ -56,7 +56,9 @@ public sealed partial class KnowledgeStoreMaintenanceRepository : IKnowledgeStor
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         await connection.ExecuteAsync("DELETE FROM web_pages WHERE origin = 'web_crawl';", transaction: transaction);
+        await connection.ExecuteAsync("DELETE FROM knowledge_document_cache_blocks;", transaction: transaction);
         await connection.ExecuteAsync("DELETE FROM system_instruction_cache;", transaction: transaction);
+        await connection.ExecuteAsync("DELETE FROM ready_question_documents;", transaction: transaction);
         await connection.ExecuteAsync("DELETE FROM ready_questions;", transaction: transaction);
 
         // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
@@ -119,9 +121,12 @@ public sealed partial class KnowledgeStoreMaintenanceRepository : IKnowledgeStor
 
     private static readonly string[] KnowledgeTables =
     [
+        "knowledge_sources",
         "web_pages",
+        "knowledge_document_cache_blocks",
         "system_instruction_cache",
-        "ready_questions"
+        "ready_questions",
+        "ready_question_documents"
     ];
 
     // Executes this component behavior as part of the Oyako application flow.
@@ -146,7 +151,7 @@ public sealed partial class KnowledgeStoreMaintenanceRepository : IKnowledgeStor
     // Executes this component behavior as part of the Oyako application flow.
     private static partial Regex BackupSetIdRegex();
 
-    [GeneratedRegex("^kr_backup_[a-zA-Z0-9_]+_(web_pages|system_instruction_cache|ready_questions)$")]
+    [GeneratedRegex("^kr_backup_[a-zA-Z0-9_]+_(knowledge_sources|web_pages|knowledge_document_cache_blocks|system_instruction_cache|ready_questions|ready_question_documents)$")]
     // Executes this component behavior as part of the Oyako application flow.
     private static partial Regex BackupTableNameRegex();
 }
