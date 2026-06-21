@@ -1,6 +1,7 @@
 REM Codex developer note: Builds, runs, and purges the Oyako full-stack Docker development container.
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+chcp 65001 >nul
 
 set "ROOT=%~dp0"
 set "IMAGE=oyako:latest"
@@ -8,6 +9,54 @@ set "CONTAINER=oyako-app"
 set "LABEL=com.oyako.app=oyako"
 set "API_DIR=%ROOT%webapi-oyako"
 set "WEB_DIR=%ROOT%webapp-oyako"
+set "TENANT_NAME=oyakdijital"
+
+:parse_args
+if "%~1"=="" goto args_done
+if /I "%~1"=="--tenant-name" (
+  if "%~2"=="" (
+    echo Missing value after --tenant-name.
+    exit /b 1
+  )
+  set "TENANT_NAME=%~2"
+  shift
+  shift
+  goto parse_args
+)
+if /I "%~1"=="--tanent-name" (
+  if "%~2"=="" (
+    echo Missing value after --tanent-name.
+    exit /b 1
+  )
+  set "TENANT_NAME=%~2"
+  shift
+  shift
+  goto parse_args
+)
+if /I "%~1"=="-t" (
+  if "%~2"=="" (
+    echo Missing value after -t.
+    exit /b 1
+  )
+  set "TENANT_NAME=%~2"
+  shift
+  shift
+  goto parse_args
+)
+echo Unsupported argument: %~1
+echo Usage: run-docker.cmd [--tenant-name ^<tenant^> ^| --tanent-name ^<tenant^> ^| -t ^<tenant^>]
+exit /b 1
+
+:args_done
+set "TENANT_ENV=%ROOT%.tenants\%TENANT_NAME%.env"
+if /I not "%TENANT_NAME%"=="oyakdijital" if /I not "%TENANT_NAME%"=="generictenant" (
+  echo Unsupported tenant: %TENANT_NAME%
+  exit /b 1
+)
+if not exist "%TENANT_ENV%" (
+  echo Tenant env file was not found: "%TENANT_ENV%"
+  exit /b 1
+)
 
 where docker >nul 2>nul
 if errorlevel 1 (
@@ -83,12 +132,12 @@ echo.
 echo Close this terminal or press Ctrl+C to stop the container. The script will best-effort purge Oyako Docker artifacts afterwards.
 echo.
 
-docker run --rm --init -it --name "%CONTAINER%" --label "%LABEL%" --label "com.oyako.role=fullstack-docker-dev" -p 8080:8080 --env-file "%ROOT%azure-cloud.env" --env-file "%ROOT%ollama-cloud.env" -e OYAKO_DOCKER=1 -e ASPNETCORE_ENVIRONMENT=Production -e ASPNETCORE_URLS=http://+:8080 -e Storage__DataRoot=/app/data -e Sqlite__ConnectionString="Data Source=/app/data/oyako.sqlite;Cache=Shared" -e Ai__DefaultProvider=ollama-cloud -e Ai__DisabledProviders__0=ollama-local --ipc=host "%IMAGE%"
+docker run --rm --init -it --name "%CONTAINER%" --label "%LABEL%" --label "com.oyako.role=fullstack-docker-dev" -p 8080:8080 --env-file "%ROOT%azure-cloud.env" --env-file "%ROOT%ollama-cloud.env" --env-file "%TENANT_ENV%" -e OYAKO_TENANT_NAME=%TENANT_NAME% -e OYAKO_DOCKER=1 -e ASPNETCORE_ENVIRONMENT=Production -e ASPNETCORE_URLS=http://+:8080 -e Storage__DataRoot=/app/data -e Sqlite__ConnectionString="Data Source=/app/data/%TENANT_NAME%/oyako.sqlite;Cache=Shared" -e Ai__DefaultProvider=ollama-cloud -e Ai__DisabledProviders__0=ollama-local --ipc=host "%IMAGE%"
 set "RUN_EXIT=%ERRORLEVEL%"
 
 if "%RUN_EXIT%"=="125" (
   echo Docker rejected the first run configuration. Retrying with --shm-size=1g instead of --ipc=host...
-  docker run --rm --init -it --name "%CONTAINER%" --label "%LABEL%" --label "com.oyako.role=fullstack-docker-dev" -p 8080:8080 --env-file "%ROOT%azure-cloud.env" --env-file "%ROOT%ollama-cloud.env" -e OYAKO_DOCKER=1 -e ASPNETCORE_ENVIRONMENT=Production -e ASPNETCORE_URLS=http://+:8080 -e Storage__DataRoot=/app/data -e Sqlite__ConnectionString="Data Source=/app/data/oyako.sqlite;Cache=Shared" -e Ai__DefaultProvider=ollama-cloud -e Ai__DisabledProviders__0=ollama-local --shm-size=1g "%IMAGE%"
+  docker run --rm --init -it --name "%CONTAINER%" --label "%LABEL%" --label "com.oyako.role=fullstack-docker-dev" -p 8080:8080 --env-file "%ROOT%azure-cloud.env" --env-file "%ROOT%ollama-cloud.env" --env-file "%TENANT_ENV%" -e OYAKO_TENANT_NAME=%TENANT_NAME% -e OYAKO_DOCKER=1 -e ASPNETCORE_ENVIRONMENT=Production -e ASPNETCORE_URLS=http://+:8080 -e Storage__DataRoot=/app/data -e Sqlite__ConnectionString="Data Source=/app/data/%TENANT_NAME%/oyako.sqlite;Cache=Shared" -e Ai__DefaultProvider=ollama-cloud -e Ai__DisabledProviders__0=ollama-local --shm-size=1g "%IMAGE%"
   set "RUN_EXIT=%ERRORLEVEL%"
 )
 

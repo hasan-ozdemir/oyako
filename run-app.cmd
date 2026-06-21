@@ -20,6 +20,16 @@ if /I "%~1"=="--tenant-name" (
   shift
   goto parse_args
 )
+if /I "%~1"=="--tanent-name" (
+  if "%~2"=="" (
+    echo Missing value after --tanent-name.
+    exit /b 1
+  )
+  set "TENANT_NAME=%~2"
+  shift
+  shift
+  goto parse_args
+)
 if /I "%~1"=="-t" (
   if "%~2"=="" (
     echo Missing value after -t.
@@ -40,12 +50,12 @@ echo Unsupported argument: %~1
 goto usage_error
 
 :usage
-echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| -t ^<tenant^>] [--no-browser]
+echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| --tanent-name ^<tenant^> ^| -t ^<tenant^>] [--no-browser]
 echo Default tenant: oyakdijital
 exit /b 0
 
 :usage_error
-echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| -t ^<tenant^>] [--no-browser]
+echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| --tanent-name ^<tenant^> ^| -t ^<tenant^>] [--no-browser]
 exit /b 1
 
 :args_done
@@ -75,7 +85,7 @@ if errorlevel 1 (
 )
 
 echo Validating tenant "%TENANT_NAME%"...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $OutputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $tenant=$env:OYAKO_TENANT_NAME; if($tenant -notmatch '^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$'){ throw ('Invalid tenant name: ' + $tenant) }; $path=Join-Path $env:OYAKO_ROOT ('.tenants\' + $tenant + '.env'); if(-not (Test-Path -LiteralPath $path)){ throw ('Tenant env file was not found: ' + $path) }; $map=@{}; foreach($line in Get-Content -Encoding UTF8 -LiteralPath $path){ $trim=$line.Trim(); if($trim.Length -eq 0 -or $trim.StartsWith('#')){ continue }; $idx=$trim.IndexOf('='); if($idx -le 0){ continue }; $map[$trim.Substring(0,$idx).Trim()]=$trim.Substring($idx+1).Trim().Trim([char]34).Trim([char]39) }; if($map['tenant_name'] -ne $tenant){ throw ('Tenant file declares tenant_name=' + $map['tenant_name'] + ', expected ' + $tenant) }; if(-not $map['tenant_display_name']){ throw 'tenant_display_name is required.' }; Write-Host ('Tenant ready: ' + $tenant + ' -> ' + $map['tenant_display_name'])"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $OutputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $tenant=$env:OYAKO_TENANT_NAME; if($tenant -notin @('oyakdijital','generictenant')){ throw ('Unsupported tenant: ' + $tenant) }; if($tenant -notmatch '^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$'){ throw ('Invalid tenant name: ' + $tenant) }; $path=Join-Path $env:OYAKO_ROOT ('.tenants\' + $tenant + '.env'); if(-not (Test-Path -LiteralPath $path)){ throw ('Tenant env file was not found: ' + $path) }; $map=@{}; foreach($line in Get-Content -Encoding UTF8 -LiteralPath $path){ $trim=$line.Trim(); if($trim.Length -eq 0 -or $trim.StartsWith('#')){ continue }; $idx=$trim.IndexOf('='); if($idx -le 0){ continue }; $key=$trim.Substring(0,$idx).Trim(); $value=$trim.Substring($idx+1).Trim().Trim([char]34).Trim([char]39); $map[$key]=[regex]::Replace($value, '%%([A-Za-z0-9_]+)%%', { param($m) $r=$m.Groups[1].Value; if($map.ContainsKey($r)){ $map[$r] } else { $m.Value } }) }; foreach($key in @('tenant_id','tenant_order_number','tenant_name','tenant_display_name','tenant_knowledge_source_1_type','tenant_knowledge_source_1_url','tenant_knowledge_source_1_refresh_period')){ if(-not $map.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$map[$key])){ throw ('Missing required tenant env key: ' + $key) } }; if($map['tenant_name'] -ne $tenant){ throw ('Tenant file declares tenant_name=' + $map['tenant_name'] + ', expected ' + $tenant) }; if($map['tenant_knowledge_source_1_type'] -ne 'web_site'){ throw 'tenant_knowledge_source_1_type must be web_site.' }; if($map['tenant_knowledge_source_1_url'] -notmatch '^https?://'){ throw 'tenant_knowledge_source_1_url must be http/https.' }; if($map['tenant_knowledge_source_1_refresh_period'] -notmatch '^(?:[1-9]|[1-5][0-9]|60)minutes?$|^(?:[1-9]|1[0-9]|2[0-4])hours?$|^[1-4]days?$|^[1-4]weeks?$'){ throw 'tenant_knowledge_source_1_refresh_period is invalid.' }; Write-Host ('Tenant ready: ' + $tenant + ' -> ' + $map['tenant_display_name'])"
 if errorlevel 1 exit /b 1
 
 echo Closing stale Oyako terminal shells...

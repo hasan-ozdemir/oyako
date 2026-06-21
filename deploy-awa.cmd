@@ -250,7 +250,7 @@ function Resolve-TenantName {
     $tenantName = $DefaultTenantName
     for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
         $arg = [string]$ScriptArgs[$index]
-        if ($arg -eq "--tenant-name" -or $arg -eq "-t") {
+        if ($arg -eq "--tenant-name" -or $arg -eq "--tanent-name" -or $arg -eq "-t") {
             if ($index + 1 -ge $ScriptArgs.Count) { Fail "$arg requires a tenant name." }
             $tenantName = [string]$ScriptArgs[$index + 1]
             $index++
@@ -260,7 +260,11 @@ function Resolve-TenantName {
             $tenantName = $arg.Substring("--tenant-name=".Length)
             continue
         }
-        Fail "Unsupported argument '$arg'. Usage: deploy-awa.cmd [--tenant-name <name>|-t <name>]"
+        if ($arg.StartsWith("--tanent-name=", [StringComparison]::OrdinalIgnoreCase)) {
+            $tenantName = $arg.Substring("--tanent-name=".Length)
+            continue
+        }
+        Fail "Unsupported argument '$arg'. Usage: deploy-awa.cmd [--tenant-name <name>|--tanent-name <name>|-t <name>]"
     }
 
     if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
@@ -282,6 +286,9 @@ function Load-TenantEnv([string]$TenantName) {
         "tenant_web_url",
         "tenant_admin_email",
         "tenant_feedback_email",
+        "tenant_knowledge_source_1_type",
+        "tenant_knowledge_source_1_url",
+        "tenant_knowledge_source_1_refresh_period",
         "primary_ai_provider",
         "secondary_ai_provider",
         "ai_provider_ollama_cloud_model",
@@ -313,7 +320,46 @@ function Load-TenantEnv([string]$TenantName) {
     }
     [void](Assert-PositiveInt ([string]$tenantEnv["tenant_order_number"]) "tenant_order_number")
     Assert-DnsLabel ([string]$tenantEnv["tenant_azure_domain_name"]) "tenant_azure_domain_name" 60
+    Validate-TenantKnowledgeSources $tenantEnv
     return [pscustomobject]@{ Path = $path; Values = $tenantEnv }
+}
+
+function Validate-TenantKnowledgeSources([hashtable]$TenantEnv) {
+    $index = 1
+    while ($TenantEnv.ContainsKey("tenant_knowledge_source_${index}_type")) {
+        Require-EnvKeys $TenantEnv @(
+            "tenant_knowledge_source_${index}_type",
+            "tenant_knowledge_source_${index}_url",
+            "tenant_knowledge_source_${index}_refresh_period"
+        ) ".tenants source $index"
+        if ([string]$TenantEnv["tenant_knowledge_source_${index}_type"] -ne "web_site") {
+            Fail "tenant_knowledge_source_${index}_type must be web_site."
+        }
+        if ([string]$TenantEnv["tenant_knowledge_source_${index}_url"] -notmatch "^https?://") {
+            Fail "tenant_knowledge_source_${index}_url must be an http/https URL."
+        }
+        if ([string]$TenantEnv["tenant_knowledge_source_${index}_refresh_period"] -notmatch "^(?:[1-9]|[1-5][0-9]|60)minutes?$|^(?:[1-9]|1[0-9]|2[0-4])hours?$|^[1-4]days?$|^[1-4]weeks?$") {
+            Fail "tenant_knowledge_source_${index}_refresh_period is invalid."
+        }
+        $index++
+    }
+}
+
+function Build-TenantKnowledgeSourceAppSettings([hashtable]$TenantEnv) {
+    $settings = @()
+    $index = 1
+    while ($TenantEnv.ContainsKey("tenant_knowledge_source_${index}_type")) {
+        $zeroIndex = $index - 1
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Key=source_$index"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Type=$($TenantEnv["tenant_knowledge_source_${index}_type"])"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Url=$($TenantEnv["tenant_knowledge_source_${index}_url"])"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__RefreshPeriod=$($TenantEnv["tenant_knowledge_source_${index}_refresh_period"])"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Name=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_name" $TenantEnv["tenant_display_name"])"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Description=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_description" "$($TenantEnv["tenant_display_name"]) seed web sitesi bilgi kaynağı.")"
+        $settings += "Tenant__KnowledgeSources__${zeroIndex}__Enabled=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_enabled" "true")"
+        $index++
+    }
+    return $settings
 }
 
 function Normalize-AiProvider([string]$Value, [string]$Name) {
@@ -702,9 +748,9 @@ try {
     if (@($appServiceLocations -split "\r?\n" | Where-Object { $_ } | ForEach-Object { Normalize-Location ([string]$_) }) -notcontains $Location) {
         Fail "Linux App Service $Sku is not available in '$Location'."
     }
-    $deployHelp = Run "az" @("webapp", "deploy", "--help") -Quiet
-    if ($deployHelp -notmatch "--track-status" -or $deployHelp -notmatch "--timeout") {
-        Fail "Azure CLI webapp deploy lacks required --track-status/--timeout arguments."
+    $deployHelp = Run "az" @("webapp", "deployment", "source", "config-zip", "--help") -Quiet
+    if ($deployHelp -notmatch "--src" -or $deployHelp -notmatch "--timeout") {
+        Fail "Azure CLI webapp deployment source config-zip lacks required --src/--timeout arguments."
     }
 
     Step "Ensuring resource group"
@@ -795,6 +841,7 @@ try {
         "Tenant__UiWebKnowledgeSourcesTableTitle=$($tenantEnv["ui_web_knowledge_sources_table_title"])",
         "Tenant__UiWebKnowledgeDocumentsTableTitle=$($tenantEnv["ui_web_knowledge_documents_table_title"])"
     )
+    $tenantAppSettings += Build-TenantKnowledgeSourceAppSettings $tenantEnv
     $appSettings = @(
         "ASPNETCORE_ENVIRONMENT=Production",
         "SCM_DO_BUILD_DURING_DEPLOYMENT=false",
@@ -828,7 +875,8 @@ try {
     Az ((@("webapp", "config", "appsettings", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--settings") + $appSettings)) -Sensitive
 
     Step "Deploying ZIP package"
-    Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "true", "--track-status", "false", "--timeout", "600000")
+    Az @("webapp", "deployment", "source", "config-zip", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src", $ZipPath, "--timeout", "600")
+    Az @("webapp", "restart", "--name", $WebAppName, "--resource-group", $ResourceGroup)
 
     $baseUrl = "https://$WebAppName.azurewebsites.net"
     $apiBaseUrl = "$baseUrl/api"

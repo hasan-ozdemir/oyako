@@ -28,6 +28,8 @@ The script reads the active environment default domain at deploy time and expect
 - Linux Basic App Service Plan
 - Azure Web App
 
+The AWA script uses Azure CLI `webapp deployment source config-zip` for the ZIP upload path. `az webapp deploy`/OneDeploy returned a long-running Kudu deployment with HTTP 502 during validation, while `config-zip` completed successfully for the same package; the script is pinned to the deterministic working path instead of trying fallback deployment methods.
+
 The scripts do not create Azure Storage Account, Static Web App, separate API App, Key Vault, Application Insights, Log Analytics Workspace, Redis, Cosmos DB, Azure SQL, PostgreSQL, MySQL, or another managed database resource.
 
 ## Tenant Naming
