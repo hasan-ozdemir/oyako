@@ -226,6 +226,32 @@ function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
     return $DefaultValue
 }
 
+function Normalize-AiProvider([string]$Value, [string]$Name) {
+    $normalized = $Value.Trim().ToLowerInvariant()
+    switch ($normalized) {
+        "azure" { return "azure" }
+        "azure-cloud" { return "azure" }
+        "ollama-cloud" { return "ollama-cloud" }
+        "ollama-local" { return "ollama-local" }
+        default { Fail "$Name '$Value' is not a supported AI provider." }
+    }
+}
+
+function Assert-BoolValue([string]$Value, [string]$Name) {
+    if ($Value -notin @("true", "false", "True", "False", "TRUE", "FALSE")) {
+        Fail "$Name must be true or false."
+    }
+    return $Value.ToLowerInvariant()
+}
+
+function Assert-PositiveInt([string]$Value, [string]$Name) {
+    $parsed = 0
+    if (-not [int]::TryParse($Value, [ref]$parsed) -or $parsed -lt 1) {
+        Fail "$Name must be a positive integer."
+    }
+    return [string]$parsed
+}
+
 function Assert-DnsLabel([string]$Value, [string]$Description, [int]$MaxLength) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         Fail "$Description cannot be empty."
@@ -315,6 +341,38 @@ function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$
     } while ((Get-Date) -lt $deadline)
 
     return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
+}
+
+function Set-RemoteAiProvider([string]$BaseUrl, [string]$Provider) {
+    $settingsUrl = "$BaseUrl/api/ai-settings"
+    try {
+        $settings = Invoke-RestMethod -Method Get -Uri $settingsUrl -TimeoutSec 60
+    }
+    catch {
+        Fail "Could not read remote AI settings from $settingsUrl. $($_.Exception.Message)"
+    }
+
+    $option = @($settings.providers | Where-Object { $_.id -eq $Provider } | Select-Object -First 1)[0]
+    if (-not $option) {
+        Fail "Remote AI provider '$Provider' is not exposed by $settingsUrl."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$option.selectedModel)) {
+        Fail "Remote AI provider '$Provider' has no selected model."
+    }
+
+    $body = @{
+        provider = $Provider
+        model = [string]$option.selectedModel
+    } | ConvertTo-Json -Compress
+
+    try {
+        Invoke-RestMethod -Method Put -Uri $settingsUrl -ContentType "application/json; charset=utf-8" -Body $body -TimeoutSec 60 | Out-Null
+    }
+    catch {
+        Fail "Could not set remote AI provider '$Provider'. $($_.Exception.Message)"
+    }
+
+    Ok "Remote AI provider set to '$Provider' with model '$($option.selectedModel)'."
 }
 
 function Get-WebApp([string]$Name) {
@@ -562,7 +620,11 @@ try {
     }
     Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--always-on", "true", "--ftps-state", "Disabled", "--startup-file", "bash startup.sh")
 
-    $aiProvider = EnvValue $azureEnv "Ai__DefaultProvider" "ollama-cloud"
+    $aiProvider = Normalize-AiProvider (EnvValue $oyakoEnv "ai_default_provider" (EnvValue $azureEnv "Ai__DefaultProvider" "ollama-cloud")) "ai_default_provider"
+    $aiFallbackProvider = Normalize-AiProvider (EnvValue $oyakoEnv "ai_fallback_provider" "azure-cloud") "ai_fallback_provider"
+    $crawlerDomainOnly = Assert-BoolValue (EnvValue $oyakoEnv "domain_only_crawling" "true") "domain_only_crawling"
+    $crawlerMaxPages = Assert-PositiveInt (EnvValue $oyakoEnv "web_document_max_count" "1000") "web_document_max_count"
+    $crawlerMaxDepth = Assert-PositiveInt (EnvValue $oyakoEnv "web_document_max_depth" "10") "web_document_max_depth"
     $appSettings = @(
         "ASPNETCORE_ENVIRONMENT=Production",
         "SCM_DO_BUILD_DURING_DEPLOYMENT=false",
@@ -572,7 +634,12 @@ try {
         "Sqlite__ConnectionString=Data Source=/home/oyako-data/oyako.sqlite;Cache=Shared",
         "PLAYWRIGHT_BROWSERS_PATH=/home/oyako-playwright/ms-playwright",
         "Ai__DefaultProvider=$aiProvider",
+        "Ai__FallbackProviders__0=$aiFallbackProvider",
         "Ai__DisabledProviders__0=ollama-local",
+        "Crawler__DomainOnlyCrawling=$crawlerDomainOnly",
+        "Crawler__IncludeSubdomains=true",
+        "Crawler__MaxPagesToCrawl=$crawlerMaxPages",
+        "Crawler__MaxDepth=$crawlerMaxDepth",
         "AzureAi__Endpoint=$($azureEnv["AzureAi__Endpoint"])",
         "AzureAi__DeploymentName=$($azureEnv["AzureAi__DeploymentName"])",
         "AzureAi__Deployments__0=$($azureEnv["AzureAi__Deployments__0"])",
@@ -594,10 +661,19 @@ try {
 
     $baseUrl = "https://$WebAppName.azurewebsites.net"
     $apiBaseUrl = "$baseUrl/api"
+    Step "Waiting for Web App health before runtime configuration"
+    $warmupSmoke = Wait-Smoke "AWA /health warmup" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
+    if (-not $warmupSmoke.Ok) {
+        Fail "AWA warmup failed. HTTP $($warmupSmoke.StatusCode) $($warmupSmoke.Snippet)"
+    }
+
+    Step "Applying configured remote AI provider"
+    Set-RemoteAiProvider $baseUrl $aiProvider
+
     Step "Running Web App smoke tests"
     $rootSmoke = Wait-Smoke "AWA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "Oyako"
     $healthSmoke = Wait-Smoke "AWA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
-    $apiHealthSmoke = Wait-Smoke "AWA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds '"status":"ready"'
+    $apiHealthSmoke = Wait-Smoke "AWA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds "`"activeAiProvider`":`"$aiProvider`""
     $browserSmoke = Wait-Smoke "AWA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
     $smokeResults = @($rootSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
