@@ -7,6 +7,9 @@ runtime-backups/
 *.env
 *.env.*
 !*.env.example
+.tenants/*.env
+!.tenants/*.env.example
+!.tenants/README.md
 oyako.env
 azure.env
 ollama.env
