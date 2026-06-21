@@ -39,24 +39,34 @@ public sealed class EnvFileLoaderTests
     }
 
     [Fact]
-    // Verifies that the old oyako.env file is not part of the primary bootstrap contract.
-    public void LoadMany_DoesNotReadOldOyakoEnvFile()
+    // Verifies that oyako.env is part of the bootstrap contract and exposes user-friendly aliases.
+    public void LoadMany_ReadsOyakoEnvAliases()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"oyako-env-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
-        var oldKey = $"LegacyOyakoKey_{Guid.NewGuid():N}";
+        var crawlerKey = "Crawler__MaxPagesToCrawl";
+        var fallbackKey = "Ai__FallbackProviders__0";
 
         try
         {
-            File.WriteAllText(Path.Combine(tempRoot, "oyako.env"), $"{oldKey}=legacy-value");
+            File.WriteAllText(
+                Path.Combine(tempRoot, "oyako.env"),
+                """
+                web_document_max_count=1000
+                ai_fallback_provider=azure-cloud
+                """);
 
-            EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env"], tempRoot);
+            EnvFileLoader.LoadMany(["azure-cloud.env", "ollama-cloud.env", "oyako.env"], tempRoot);
 
-            Assert.Null(Environment.GetEnvironmentVariable(oldKey));
+            Assert.Equal("1000", Environment.GetEnvironmentVariable(crawlerKey));
+            Assert.Equal("azure", Environment.GetEnvironmentVariable(fallbackKey));
         }
         finally
         {
-            Environment.SetEnvironmentVariable(oldKey, null);
+            Environment.SetEnvironmentVariable("web_document_max_count", null);
+            Environment.SetEnvironmentVariable("ai_fallback_provider", null);
+            Environment.SetEnvironmentVariable(crawlerKey, null);
+            Environment.SetEnvironmentVariable(fallbackKey, null);
             Directory.Delete(tempRoot, recursive: true);
         }
     }

@@ -4,6 +4,15 @@ namespace webapi_oyako.Infrastructure.Configuration;
 // Implements the EnvFileLoader component and its responsibilities in the Oyako codebase.
 public static class EnvFileLoader
 {
+    private static readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["domain_only_crawling"] = "Crawler__DomainOnlyCrawling",
+        ["web_document_max_count"] = "Crawler__MaxPagesToCrawl",
+        ["web_document_max_depth"] = "Crawler__MaxDepth",
+        ["ai_default_provider"] = "Ai__DefaultProvider",
+        ["ai_fallback_provider"] = "Ai__FallbackProviders__0"
+    };
+
     // Loads each explicitly supported environment file and keeps the last file as the highest-precedence file.
     public static void LoadMany(IEnumerable<string> fileNames, string contentRootPath)
     {
@@ -49,8 +58,29 @@ public static class EnvFileLoader
                 continue;
             }
 
-            Environment.SetEnvironmentVariable(key, value);
+            SetEnvironmentValue(key, value);
         }
+    }
+
+    private static void SetEnvironmentValue(string key, string value)
+    {
+        Environment.SetEnvironmentVariable(key, value);
+        if (!Aliases.TryGetValue(key, out var mappedKey))
+        {
+            return;
+        }
+
+        Environment.SetEnvironmentVariable(mappedKey, NormalizeAliasValue(mappedKey, value));
+    }
+
+    private static string NormalizeAliasValue(string mappedKey, string value)
+    {
+        if (!mappedKey.StartsWith("Ai__", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        return value.Equals("azure-cloud", StringComparison.OrdinalIgnoreCase) ? "azure" : value;
     }
 
     // Executes this component behavior as part of the Oyako application flow.

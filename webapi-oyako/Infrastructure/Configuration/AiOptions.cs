@@ -8,6 +8,8 @@ public sealed class AiOptions
 
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public string DefaultProvider { get; set; } = "ollama-cloud";
+    // Ordered fallback providers used after the active provider fails before emitting an answer.
+    public string[] FallbackProviders { get; set; } = ["azure"];
     // Lists provider identifiers that should not be registered into runtime provider selection surfaces.
     public string[] DisabledProviders { get; set; } = [];
 }

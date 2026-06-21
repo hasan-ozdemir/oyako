@@ -9,9 +9,13 @@ public sealed class CrawlerOptions
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public string SeedUrl { get; set; } = "https://oyakdijital.com.tr";
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
-    public int MaxPagesToCrawl { get; set; } = 180;
+    public int MaxPagesToCrawl { get; set; } = 1000;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
-    public int MaxDepth { get; set; } = 8;
+    public int MaxDepth { get; set; } = 10;
+    // Keeps automatic website crawling constrained to the configured source domain by default.
+    public bool DomainOnlyCrawling { get; set; } = true;
+    // Allows source-owned subdomains such as bagis.generic-tenant.org.tr for a www.generic-tenant.org.tr seed.
+    public bool IncludeSubdomains { get; set; } = true;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public int RequestTimeoutSeconds { get; set; } = 5;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
@@ -28,6 +32,8 @@ public sealed class CrawlerOptions
     public int RenderExtraWaitMilliseconds { get; set; } = 0;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public bool SourceRefreshEnabled { get; set; } = true;
+    // Runs local raw-file manifest replay after startup unless disabled by deterministic verification scripts.
+    public bool LocalKnowledgeRebuildOnStartupEnabled { get; set; } = true;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public int SourceRefreshIntervalMinutes { get; set; } = 60;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
