@@ -20,7 +20,7 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 
 ## Safety Rules
 
-- Never commit real secrets: `oyako.env`, `azure.env`, `azure-cloud.env`, `ollama.env`, `ollama-cloud.env`, certificates, SQLite files, logs, runtime data, or uploaded raw files.
+- Never commit real secrets: `.tenants/*.env`, `oyako.env`, `azure.env`, `azure-cloud.env`, `ollama.env`, `ollama-cloud.env`, certificates, SQLite files, logs, runtime data, or uploaded raw files.
 - Commit only safe `.env.example` files.
 - Keep `webapi-oyako/Data/`, `.certificates/`, `node_modules/`, `dist/`, `bin/`, `obj/`, and Playwright artifacts out of Git.
 - Before public push, scan staged content for API keys, private keys, connection strings, and generated data.
@@ -60,7 +60,7 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - `deploy-aca.cmd` deploys one image: `oyako:latest`.
 - `deploy-awa.cmd` deploys the locally published ASP.NET app and embedded React SPA directly to one Linux Azure Web App without Docker or ACR.
 - Azure ACR should retain only the latest `oyako:latest` image for this pre-alpha flow.
-- Azure deploy target uses subscription `az2vs`, resource group `rg-oyako`, and location `italynorth`.
+- Azure deploy target uses subscription `az2vs`, location `italynorth`, and per-tenant resource groups named `rg-<tenant_id>-<tenant_order_number>`.
 
 ## Documentation Discipline
 
