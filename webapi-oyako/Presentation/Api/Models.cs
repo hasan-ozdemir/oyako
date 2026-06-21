@@ -216,7 +216,8 @@ public sealed record KnowledgeSourceUpsertRequest(
     string? Name,
     string? Description,
     string? Address,
-    bool? IsEnabled);
+    bool? IsEnabled,
+    bool? Redownload);
 
 // Defines the immutable KnowledgeDocumentUpdateRequest data shape exchanged between Oyako components.
 public sealed record KnowledgeDocumentUpdateRequest(

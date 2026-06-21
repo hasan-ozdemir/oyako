@@ -496,7 +496,7 @@ public static class ApiEndpoints
             {
                 var sourceType = NormalizeSourceType(request.SourceType);
                 var source = await webPageRepository.AddSourceAsync(sourceType, request.Name ?? string.Empty, request.Description, request.Address, cancellationToken);
-                if (sourceType == "web_site")
+                if (sourceType == "web_site" && request.Redownload != false)
                 {
                     await knowledgeRedownloadService.RedownloadSourceAsync(source.Id, cancellationToken);
                 }
@@ -545,7 +545,7 @@ public static class ApiEndpoints
                     return Results.NotFound(new { message = "Kaynak bulunamadı." });
                 }
 
-                if (shouldRedownloadWebSite)
+                if (shouldRedownloadWebSite && request.Redownload != false)
                 {
                     await knowledgeRedownloadService.RedownloadSourceAsync(id, cancellationToken);
                 }
@@ -1238,7 +1238,8 @@ public static class ApiEndpoints
     private static string? NormalizeProvider(string provider)
     {
         // Guards the following branch so the workflow handles this condition deliberately.
-        if (provider.Equals("azure", StringComparison.OrdinalIgnoreCase))
+        if (provider.Equals("azure", StringComparison.OrdinalIgnoreCase)
+            || provider.Equals("azure-cloud", StringComparison.OrdinalIgnoreCase))
         {
             // Returns the computed result to the caller and completes this branch of the workflow.
             return "azure";
@@ -1346,7 +1347,9 @@ public static class ApiEndpoints
     private static HashSet<string> BuildDisabledProviderSet(AiOptions aiOptions)
     {
         return new HashSet<string>(
-            aiOptions.DisabledProviders.Where(provider => !string.IsNullOrWhiteSpace(provider)),
+            aiOptions.DisabledProviders
+                .Select(NormalizeProvider)
+                .OfType<string>(),
             StringComparer.OrdinalIgnoreCase);
     }
 
