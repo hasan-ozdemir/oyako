@@ -3,7 +3,7 @@
 ## Target Scope
 
 - Azure subscription: `az2vs`
-- Azure resource group: `rg-oyako`
+- Azure resource group: per tenant, `rg-<tenant_id>-<tenant_order_number>`
 - Azure location: `italynorth`
 - Image policy for ACA: one repository/tag, `oyako:latest`
 
@@ -15,13 +15,13 @@
 - Azure Container Apps Environment
 - Azure Container App with one always-on replica
 
-For cutover from the previous pre-alpha ACA script, `deploy-aca.cmd` removes only script-owned legacy names after the new deployment passes smoke tests. The default legacy names are `oyako-aca`, `aca-oyako-env`, and `acaoyako<subscription8>weacr`. It does not remove unrelated untagged resources or shared AI resources.
+For cutover from the previous pre-alpha ACA script, `deploy-aca.cmd` removes only script-owned resources after the new deployment passes smoke tests. It does not remove unrelated untagged resources or shared AI resources.
 
 ACA default hostnames are Azure-managed and include the Container Apps Environment suffix:
 
 `https://<container-app-name>.<environment-default-domain>/`
 
-The script reads the active environment default domain at deploy time and expects the app hostname to match that Azure-managed value. With the current default app/environment names, the expected ACA hostname is `https://oyako.bluepond-a0ca5d32.italynorth.azurecontainerapps.io/`, with API traffic under `/api`. The shorter hostname `https://oyako.italynorth.azurecontainerapps.io/` is not an Azure Container Apps managed default hostname format. Use an ACA custom domain with owned DNS and certificate material if that exact public hostname is required.
+The script reads the active environment default domain at deploy time and expects the app hostname to match that Azure-managed value. The container app name is tenant-driven from `tenant_azure_domain_name`, so the default managed hostname becomes `https://<tenant_azure_domain_name>.<environment-default-domain>/`, with API traffic under `/api`. The shorter hostname `https://<tenant_azure_domain_name>.italynorth.azurecontainerapps.io/` is not an Azure Container Apps managed default hostname format. Use an ACA custom domain with owned DNS and certificate material if that exact public hostname is required.
 
 `deploy-awa.cmd` manages only resources tagged with `app=oyako`, `managed-by=deploy-awa`, and `deployment-scope=oyako-awa`:
 
@@ -30,24 +30,28 @@ The script reads the active environment default domain at deploy time and expect
 
 The scripts do not create Azure Storage Account, Static Web App, separate API App, Key Vault, Application Insights, Log Analytics Workspace, Redis, Cosmos DB, Azure SQL, PostgreSQL, MySQL, or another managed database resource.
 
-## Deployment Naming
+## Tenant Naming
 
-`oyako.env` is optional and ignored by Git. Use `oyako.env.example` as the safe template for tenant/app naming. If `oyako.env` is missing, both scripts use these defaults:
+Tenant configuration is loaded from `.tenants/<tenant-name>.env`. The real `.env` files are ignored by Git; commit only `.env.example` templates. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
 
-- `OYAKO_TENANT_SLUG=oyako`
-- ACA app: `OYAKO_ACA_APP_NAME=oyako`
-- ACA environment: `OYAKO_ACA_ENV_NAME=oyako-aca-env`
-- AWA Web App: `OYAKO_AWA_WEBAPP_NAME=oyako`
-- AWA App Service Plan: `OYAKO_AWA_PLAN_NAME=oyako-awa-plan`
+Required tenant keys include:
 
-`deploy-awa.cmd` checks App Service global name availability before local build/publish. If `oyako` is available, the target default hostname is `https://oyako.azurewebsites.net/`; otherwise the script fails before Azure mutation and the name must be changed in `oyako.env`.
+- `tenant_id`: 32 lowercase hex characters.
+- `tenant_order_number`: positive integer, starting at `1` per tenant identity.
+- `tenant_name`: must match the selected `<tenant-name>`.
+- `tenant_azure_domain_name`: used as the Azure Web App name and ACA app name.
+- `tenant_custom_domain_name`: optional custom hostname. Scripts warn and continue if DNS or Azure hostname binding is not ready.
+
+Resource groups are tenant-scoped: `rg-<tenant_id>-<tenant_order_number>`.
+
+`deploy-awa.cmd` checks App Service global name availability before local build/publish. If `<tenant_azure_domain_name>` is unavailable or belongs to an unowned app, the script fails before Azure mutation and the tenant env file must be changed or the name reclaimed in Azure.
 
 ## Database Strategy
 
 Oyako uses portable SQLite and bootstraps the schema at application startup. The deployment scripts keep SQLite as an app-local file:
 
-- ACA: `/app/data/oyako.sqlite`
-- AWA: `/home/oyako-data/oyako.sqlite`
+- ACA: `/app/data/<tenant_name>/oyako.sqlite`
+- AWA: `/home/oyako-data/<tenant_name>/oyako.sqlite`
 
 This satisfies the no-external-DB rule, but ACA container filesystem data is not a durable database strategy across aggressive recreation, image replacement, or instance loss. The ACA script is intentionally cutover-oriented and may reset local SQLite state when it recreates the Container App or Environment. The AWA path uses App Service `/home`, which is more stable for app-local files, but it is still not a separately managed database service.
 
@@ -59,6 +63,12 @@ Both Azure deployment scripts fail fast if required cloud env files or required 
 - `ollama-cloud.env`: `ollama_api_key`
 
 These files are local-only and ignored by Git. The scripts do not invent secrets.
+
+Tenant `.env` files may contain deployment names, public branding, and local SQLite paths. They are still ignored by Git because real tenant configuration can later include private operational values.
+
+## Tenant Brand Assets
+
+Tenant brand logo SVGs are served locally from `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` so deployed pages do not depend on remote logo hotlinks. The current examples are derived from public Wikimedia SVG assets for OYAK and generic-tenant; verify trademark and brand usage approvals before public production rollout.
 
 ## Playwright and Browser Health
 

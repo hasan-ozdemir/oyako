@@ -16,7 +16,8 @@ The repository has two primary applications and shared operational files.
 - `run-app.cmd`: local automation that restarts and runs backend and frontend together.
 - `Dockerfile`: production single-process image that serves the React SPA from ASP.NET `wwwroot` on port `8080`.
 - `deploy-aca.cmd` and `deploy-awa.cmd`: minimal Azure deployment scripts for Container Apps and direct Linux Web App hosting.
-- `oyako.env`: local environment variable source for sensitive AI provider configuration.
+- `.tenants/<tenant-name>.env`: local tenant configuration source for branding, tenant IDs, Azure names, AI provider defaults, crawler limits, and SQLite path.
+- `azure-cloud.env` and `ollama-cloud.env`: local-only cloud provider secret sources.
 
 Generated folders such as `bin`, `obj`, `node_modules`, `dist`, and Playwright artifacts are not part of source architecture.
 
@@ -64,7 +65,7 @@ The Infrastructure layer connects the application to external systems.
 - `AzureAiClient` calls Azure AI chat completions and parses streaming/non-streaming responses.
 - `OllamaClient` calls local Ollama on port 11434 and preserves one-shot system/user prompt behavior.
 - `AiProviderRouter` selects the active provider and exposes provider/model availability.
-- `EnvFileLoader` loads `oyako.env` into the process environment.
+- `EnvFileLoader` loads cloud provider env files and the selected `.tenants/<tenant-name>.env` into the process environment.
 - `CrawlBootstrapHostedService` starts background crawling when the web API starts.
 
 Infrastructure is the only layer that knows concrete frameworks, database drivers, browser automation, HTTP clients, and AI provider protocols.
@@ -200,7 +201,7 @@ Full-stack validation starts backend and frontend, checks health endpoints, opti
 - Local development ports: backend 5000/5001 and frontend 3000.
 - Single-host/container port: 8080.
 - SQLite is portable and hosted by the web API. Azure deploy scripts keep it as a local file inside the app/container and do not create external managed database resources.
-- `oyako.env` supplies local secrets such as Azure AI API key.
+- `.tenants/<tenant-name>.env` supplies tenant-specific runtime configuration; cloud provider secrets stay in ignored provider env files.
 - `azure-cloud.env` and `ollama-cloud.env` supply cloud deployment secrets at deploy time and must not be committed.
 - Azure/Ollama Cloud are deployment-capable providers; Ollama Local is disabled for Azure-hosted runs.
 - Knowledge refresh may call external web resources and AI providers, so tests should distinguish fast mock tests from slower special tests.

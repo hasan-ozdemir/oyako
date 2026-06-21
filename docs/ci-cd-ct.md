@@ -146,14 +146,15 @@ Secrets must not be committed.
 - GitHub Actions should use GitHub repository/environment secrets.
 - Azure DevOps should use Library variable groups or Azure Key Vault integration.
 - Azure AI API keys should map to the same environment variable naming expected by backend options.
-- `oyako.env` is for local development only.
+- `.tenants/<tenant-name>.env` is for local tenant runtime configuration and is ignored by Git.
+- `azure-cloud.env` and `ollama-cloud.env` are local-only provider secret files.
 
 ### 6.4 Deployment Targets
 
 Current minimal deployment targets:
 
-- `deploy-aca.cmd`: one Azure Container Registry Basic SKU, one Azure Container Apps Environment, and one always-on Container App in `italynorth`, using the single image `oyako:latest`.
-- `deploy-awa.cmd`: one Linux Basic B1 App Service Plan and one Azure Web App in `italynorth`, using direct ZIP deploy from locally published `linux-x64` source and startup-time Playwright dependency installation.
+- `deploy-aca.cmd`: per-tenant resource group, one Azure Container Registry Basic SKU, one Azure Container Apps Environment, and one always-on Container App in `italynorth`, using the single image `oyako:latest`.
+- `deploy-awa.cmd`: per-tenant resource group, one Linux Basic B1 App Service Plan and one Azure Web App in `italynorth`, using direct ZIP deploy from locally published `linux-x64` source and startup-time Playwright dependency installation.
 
 Both targets serve the React SPA and ASP.NET API from one public hostname, keep SQLite as an app-local file, and require secure environment variables for AI providers. They do not create Azure Storage, Static Web Apps, separate API apps, Key Vault, Application Insights, Redis, Cosmos DB, or a managed SQL/PostgreSQL/MySQL database.
 
