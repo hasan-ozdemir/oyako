@@ -19,6 +19,8 @@ Oyako is a Turkish full-stack question-answer platform for curated knowledge sou
 
 The local script reads `.tenants/oyakdijital.env` by default, starts the backend on ports `5000` and `5001`, starts the frontend on port `3000`, and opens the default browser when the frontend is ready. Use `.\run-app.cmd --tenant-name generictenant` to run another tenant locally.
 
+Tenant env files also seed the baseline website knowledge source for that tenant through `tenant_knowledge_source_1_type`, `tenant_knowledge_source_1_url`, and `tenant_knowledge_source_1_refresh_period`. Background refresh applies only to these env-managed seed website sources; admin-added sources and documents stay tenant-local and are preserved.
+
 ## Docker Development
 
 ```powershell
@@ -42,6 +44,8 @@ The Container Apps script uses Azure CLI, Docker Desktop, `azure-cloud.env`, `ol
 ```
 
 The Web App script publishes the ASP.NET API for Linux with the React SPA copied into `wwwroot`, then deploys the ZIP to one Linux Azure Web App on a Basic always-on App Service Plan. It installs Playwright Chromium dependencies at startup so `/health/browser` can pass without Docker or ACR. It uses the same `az2vs` / per-tenant resource group / `italynorth` target and does not create ACR, Azure Storage, Key Vault, Application Insights, or an external managed database. Pass `--tenant-name <tenant>` or `-t <tenant>`; the default is `oyakdijital`.
+
+Custom domain binding is optional in both deploy scripts. If DNS or Azure hostname binding is not ready, the script reports a warning and continues with the Azure-managed hostname.
 
 ## Secret Policy
 

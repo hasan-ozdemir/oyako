@@ -146,7 +146,7 @@ Secrets must not be committed.
 - GitHub Actions should use GitHub repository/environment secrets.
 - Azure DevOps should use Library variable groups or Azure Key Vault integration.
 - Azure AI API keys should map to the same environment variable naming expected by backend options.
-- `.tenants/<tenant-name>.env` is for local tenant runtime configuration and is ignored by Git.
+- `.tenants/<tenant-name>.env` is for local tenant runtime configuration and is ignored by Git. It must include at least one indexed `tenant_knowledge_source_N_*` seed website source.
 - `azure-cloud.env` and `ollama-cloud.env` are local-only provider secret files.
 
 ### 6.4 Deployment Targets
@@ -156,7 +156,7 @@ Current minimal deployment targets:
 - `deploy-aca.cmd`: per-tenant resource group, one Azure Container Registry Basic SKU, one Azure Container Apps Environment, and one always-on Container App in `italynorth`, using the single image `oyako:latest`.
 - `deploy-awa.cmd`: per-tenant resource group, one Linux Basic B1 App Service Plan and one Azure Web App in `italynorth`, using direct ZIP deploy from locally published `linux-x64` source and startup-time Playwright dependency installation.
 
-Both targets serve the React SPA and ASP.NET API from one public hostname, keep SQLite as an app-local file, and require secure environment variables for AI providers. They do not create Azure Storage, Static Web Apps, separate API apps, Key Vault, Application Insights, Redis, Cosmos DB, or a managed SQL/PostgreSQL/MySQL database.
+Both targets serve the React SPA and ASP.NET API from one public hostname, keep SQLite as an app-local file, and require secure environment variables for AI providers. Custom domains are optional and should warn without blocking when DNS or binding is not ready. They do not create Azure Storage, Static Web Apps, separate API apps, Key Vault, Application Insights, Redis, Cosmos DB, or a managed SQL/PostgreSQL/MySQL database.
 
 ## 7. GitHub Actions Blueprint
 
