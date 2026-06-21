@@ -13,6 +13,7 @@ import type {
   KnowledgeRedownloadResponse,
   KnowledgeSourceDiagnosticsResponse,
   KnowledgeUploadSettingsResponse,
+  KnowledgeRefreshSettingsResponse,
   AiSettingsResponse,
   QnaExperienceSettingsResponse,
   ReadyQuestionsResponse,
@@ -423,6 +424,33 @@ export async function fetchQnaExperienceSettings(): Promise<QnaExperienceSetting
   }
 
   return response.json()
+}
+
+export async function fetchKnowledgeRefreshSettings(): Promise<KnowledgeRefreshSettingsResponse> {
+  const response = await fetch(`${API_BASE}/knowledge-refresh-settings`)
+  const payload = await response.json().catch(() => null) as KnowledgeRefreshSettingsResponse | { message?: string } | null
+  if (!response.ok) {
+    throw new Error((payload as { message?: string } | null)?.message || 'Bilgi kaynaklarının yenilenme sıklığı alınamadı.')
+  }
+
+  return payload as KnowledgeRefreshSettingsResponse
+}
+
+export async function updateKnowledgeRefreshSettings(
+  refreshPeriodValue: number,
+  refreshPeriodUnit: KnowledgeRefreshSettingsResponse['refreshPeriodUnit'],
+): Promise<KnowledgeRefreshSettingsResponse> {
+  const response = await fetch(`${API_BASE}/knowledge-refresh-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshPeriodValue, refreshPeriodUnit }),
+  })
+  const payload = await response.json().catch(() => null) as KnowledgeRefreshSettingsResponse | { message?: string } | null
+  if (!response.ok) {
+    throw new Error((payload as { message?: string } | null)?.message || 'Bilgi kaynaklarının yenilenme sıklığı kaydedilemedi.')
+  }
+
+  return payload as KnowledgeRefreshSettingsResponse
 }
 
 // Implements a frontend function that persists Q&A experience settings.

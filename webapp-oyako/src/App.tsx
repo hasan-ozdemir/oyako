@@ -33,7 +33,7 @@ import {
   Upload,
   WifiOff,
 } from 'lucide-react'
-import type { AiSettingsResponse, ChatMessage, KnowledgeBankDocument, KnowledgeBankResponse, KnowledgeBankSource, KnowledgeDocumentContentResponse, KnowledgeDocumentDiagnosticsResponse, KnowledgeFilePreviewItem, KnowledgeRedownloadResponse, KnowledgeSourceDiagnosticsResponse, KnowledgeUploadSettingsResponse, QnaExperienceSettingsResponse, RuntimeStatus, SourceAttribution, TenantConfigResponse } from './types/chat'
+import type { AiSettingsResponse, ChatMessage, KnowledgeBankDocument, KnowledgeBankResponse, KnowledgeBankSource, KnowledgeDocumentContentResponse, KnowledgeDocumentDiagnosticsResponse, KnowledgeFilePreviewItem, KnowledgeRedownloadResponse, KnowledgeSourceDiagnosticsResponse, KnowledgeRefreshSettingsResponse, KnowledgeUploadSettingsResponse, QnaExperienceSettingsResponse, RuntimeStatus, SourceAttribution, TenantConfigResponse } from './types/chat'
 import {
   addKnowledgeSource,
   addManualWebDocument,
@@ -45,6 +45,7 @@ import {
   fetchKnowledgeDocumentContent,
   fetchKnowledgeDocumentDiagnostics,
   fetchKnowledgeHealth,
+  fetchKnowledgeRefreshSettings,
   fetchKnowledgeSourceDiagnostics,
   fetchKnowledgeSettings,
   fetchQnaExperienceSettings,
@@ -62,6 +63,7 @@ import {
   streamChat,
   updateAiSettings,
   updateKnowledgeSettings,
+  updateKnowledgeRefreshSettings,
   updateQnaExperienceSettings,
   updateKnowledgeDocument,
   updateKnowledgeDocumentWebLink,
@@ -89,9 +91,6 @@ interface LogViewerState {
   returnFocusTo: HTMLElement | null
 }
 
-// Defines a reusable frontend value used by the surrounding module.
-const readyQuestionsStorageKey = 'oyako.readyQuestions'
-
 // Defines the primary Q&A experience defaults used before backend settings load.
 const defaultQnaExperienceSettings: QnaExperienceSettingsResponse = {
   displayedReadyQuestionCount: 4,
@@ -101,43 +100,61 @@ const defaultQnaExperienceSettings: QnaExperienceSettingsResponse = {
   updatedAtUtc: new Date(0).toISOString(),
 }
 
-// Defines the default tenant shown before runtime tenant config is loaded.
-const defaultTenantConfig: TenantConfigResponse = {
-  tenantId: '013dfb350ed64e324a805eae86646ddf',
-  tenantOrderNumber: 1,
-  tenantName: 'oyakdijital',
-  tenantDisplayName: 'Oyak Dijital',
-  tenantAzureDomainName: 'oyako',
-  tenantCustomDomainName: 'oyako.oyakdijital.com.tr',
-  tenantWebUrl: 'https://www.oyakdijital.com.tr',
-  tenantAdminEmail: 'admin@oyakdijital.com.tr',
-  tenantFeedbackEmail: 'iletisim@oyakdijital.com.tr',
-  primaryAiProvider: 'ollama-cloud',
-  secondaryAiProvider: 'azure',
-  uiWebBrandName: 'Oyak Dijital',
-  uiWebAssistantName: 'Oyako',
-  uiWebTitle: 'Oyako: Oyak Dijital Soru-Cevap Platformu',
-  uiWebHeaderTitle: 'Oyak Dijital soru-cevap platformu',
-  uiWebBrandLogoUrl: '/tenants/oyakdijital/brand-logo.svg',
-  uiWebAssistantWelcomeMessage: 'Merhaba, ben dijital asistanınız Oyako. Oyak Dijital ile ilgili merak ettiğiniz her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.',
-  uiWebAssistantHeaderTitle: 'Oyak Dijital hakkında öğrenmek istediğinizi sorun:',
-  uiWebMoreMenuBrandLink: 'Oyak Dijital',
+const defaultKnowledgeRefreshSettings: KnowledgeRefreshSettingsResponse = {
+  refreshPeriodValue: 1,
+  refreshPeriodUnit: 'hour',
+  refreshPeriodMinutes: 60,
+  updatedAtUtc: new Date(0).toISOString(),
+}
+
+const refreshPeriodUnitOptions: Array<{ value: KnowledgeRefreshSettingsResponse['refreshPeriodUnit']; label: string; max: number }> = [
+  { value: 'minute', label: 'Dakika', max: 60 },
+  { value: 'hour', label: 'Saat', max: 24 },
+  { value: 'day', label: 'Gün', max: 4 },
+  { value: 'week', label: 'Hafta', max: 4 },
+]
+
+const loadingTenantConfig: TenantConfigResponse = {
+  tenantId: '',
+  tenantOrderNumber: 0,
+  tenantName: '',
+  tenantDisplayName: 'Tenant',
+  tenantAzureDomainName: '',
+  tenantCustomDomainName: '',
+  tenantWebUrl: '/',
+  tenantAdminEmail: '',
+  tenantFeedbackEmail: '',
+  primaryAiProvider: '',
+  secondaryAiProvider: '',
+  uiWebBrandName: 'Tenant',
+  uiWebAssistantName: 'Asistan',
+  uiWebTitle: 'Soru-Cevap Platformu',
+  uiWebHeaderTitle: 'Soru-cevap platformu',
+  uiWebBrandLogoUrl: '/favicon.svg',
+  uiWebAssistantWelcomeMessage: 'Tenant yapılandırması yükleniyor.',
+  uiWebAssistantHeaderTitle: 'Sorunuzu yazın:',
+  uiWebMoreMenuBrandLink: 'Web Sitesi',
   uiWebMoreMenuFeedbackLink: 'Geri Bildirim Gönderin',
   uiWebMoreMenuHelpLink: 'Yardım',
   uiWebSettingsPageTitle: 'Ayarlar',
-  uiWebSettingsHeaderTitle: 'Oyako çalışma ayarları',
+  uiWebSettingsHeaderTitle: 'Ayarlar',
   uiWebKnowledgeBankHeaderTitle: 'Bilgi Bankası',
   uiWebKnowledgeSourceHeaderTitle: 'Bilgi Kaynakları',
-  uiWebKnowledgeSourceHeaderMessage: 'Oyako, sorularınıza cevap verirken aşağıda gösterilen {sourceCount} adet bilgi kaynağını ve {documentCount} adet belgeyi kullanabilir.',
+  uiWebKnowledgeSourceHeaderMessage: 'Aşağıda gösterilen {sourceCount} adet bilgi kaynağı ve {documentCount} adet belge kullanılabilir.',
   uiWebKnowledgeSourcesTableTitle: 'Şu kaynaklar kullanılabilir:',
   uiWebKnowledgeDocumentsTableTitle: 'Şu belgeler kullanılabilir:',
 }
 
 // Implements a frontend function that supports Oyako user or API behavior.
-function loadPersistedReadyQuestions(): string[] {
+function buildReadyQuestionsStorageKey(tenantName: string): string {
+  return `oyako.readyQuestions.${tenantName}`
+}
+
+// Implements a frontend function that supports Oyako user or API behavior.
+function loadPersistedReadyQuestions(tenantName: string): string[] {
   try {
     // Defines a reusable frontend value used by the surrounding module.
-    const raw = window.localStorage.getItem(readyQuestionsStorageKey)
+    const raw = window.localStorage.getItem(buildReadyQuestionsStorageKey(tenantName))
     // Guards this branch so the UI handles the condition intentionally.
     if (!raw) {
       // Returns the value or JSX produced by this frontend workflow.
@@ -164,9 +181,9 @@ function loadPersistedReadyQuestions(): string[] {
 }
 
 // Implements a frontend function that supports Oyako user or API behavior.
-function persistReadyQuestions(questions: string[]) {
+function persistReadyQuestions(tenantName: string, questions: string[]) {
   try {
-    window.localStorage.setItem(readyQuestionsStorageKey, JSON.stringify(questions.slice(0, 10)))
+    window.localStorage.setItem(buildReadyQuestionsStorageKey(tenantName), JSON.stringify(questions.slice(0, 10)))
   } catch {
     // localStorage may be unavailable in restricted browser contexts.
   }
@@ -752,7 +769,8 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   // Creates React state that drives an interactive part of the UI.
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus)
-  const [tenantConfig, setTenantConfig] = useState<TenantConfigResponse>(defaultTenantConfig)
+  const [tenantConfig, setTenantConfig] = useState<TenantConfigResponse>(loadingTenantConfig)
+  const [tenantConfigError, setTenantConfigError] = useState('')
   const appSurfaceRef = useRef<HTMLDivElement | null>(null)
   const lastFocusTargetRef = useRef<HTMLElement | null>(null)
   const hadFloatingSurfaceRef = useRef(false)
@@ -864,6 +882,7 @@ function App() {
   const [aiSettings, setAiSettings] = useState<AiSettingsResponse | null>(null)
   // Creates React state that stores upload limit settings from the backend.
   const [knowledgeUploadSettings, setKnowledgeUploadSettings] = useState<KnowledgeUploadSettingsResponse | null>(null)
+  const [knowledgeRefreshSettings, setKnowledgeRefreshSettings] = useState<KnowledgeRefreshSettingsResponse>(defaultKnowledgeRefreshSettings)
   // Creates React state that stores Q&A experience settings from the backend.
   const [qnaExperienceSettings, setQnaExperienceSettings] = useState<QnaExperienceSettingsResponse>(defaultQnaExperienceSettings)
   // Creates React state that drives an interactive part of the UI.
@@ -876,6 +895,8 @@ function App() {
   const [draftMaxBatchFileCount, setDraftMaxBatchFileCount] = useState(100)
   // Creates React state that edits maximum batch size in megabytes.
   const [draftMaxBatchSizeMb, setDraftMaxBatchSizeMb] = useState(250)
+  const [draftRefreshPeriodValue, setDraftRefreshPeriodValue] = useState(defaultKnowledgeRefreshSettings.refreshPeriodValue)
+  const [draftRefreshPeriodUnit, setDraftRefreshPeriodUnit] = useState<KnowledgeRefreshSettingsResponse['refreshPeriodUnit']>(defaultKnowledgeRefreshSettings.refreshPeriodUnit)
   // Creates React state that edits displayed ready question count.
   const [draftDisplayedReadyQuestionCount, setDraftDisplayedReadyQuestionCount] = useState(defaultQnaExperienceSettings.displayedReadyQuestionCount)
   // Creates React state that edits displayed suggested question count.
@@ -893,7 +914,7 @@ function App() {
   // Creates React state that drives an interactive part of the UI.
   const [latestSuggestedQuestions, setLatestSuggestedQuestions] = useState<string[]>([])
   // Creates React state that drives an interactive part of the UI.
-  const [readyQuestions, setReadyQuestions] = useState<string[]>(() => loadPersistedReadyQuestions())
+  const [readyQuestions, setReadyQuestions] = useState<string[]>([])
   // Creates React state that drives an interactive part of the UI.
   const [isReadyQuestionsLoading, setIsReadyQuestionsLoading] = useState(false)
   // Defines the active number of ready questions shown in the web UI.
@@ -904,6 +925,7 @@ function App() {
   const autoSubmitPromptButtons = qnaExperienceSettings.autoSubmitPromptButtons
   // Defines whether answer source document names are rendered below assistant answers.
   const showAnswerSourceDocumentNames = qnaExperienceSettings.showAnswerSourceDocumentNames
+  const selectedRefreshPeriodUnit = refreshPeriodUnitOptions.find((option) => option.value === draftRefreshPeriodUnit) ?? refreshPeriodUnitOptions[1]
   // Defines the ready questions currently visible to the user.
   const visibleReadyQuestions = readyQuestions.slice(0, displayedReadyQuestionCount)
   // Defines a reusable frontend value used by the surrounding module.
@@ -1097,8 +1119,10 @@ function App() {
 
     // Defines a reusable frontend value used by the surrounding module.
     const completeInitialLoad = async () => {
-      const loadedTenantConfig = await fetchTenantConfig().catch(() => defaultTenantConfig)
+      const loadedTenantConfig = await fetchTenantConfig()
       setTenantConfig(loadedTenantConfig)
+      setTenantConfigError('')
+      setReadyQuestions(loadPersistedReadyQuestions(loadedTenantConfig.tenantName))
 
       const initialQnaSettings = await fetchQnaExperienceSettings().catch(() => defaultQnaExperienceSettings)
       setQnaExperienceSettings(initialQnaSettings)
@@ -1179,7 +1203,25 @@ function App() {
       startPolling()
     }
 
-    void completeInitialLoad()
+    void completeInitialLoad().catch((ex) => {
+      if (isDisposed) {
+        return
+      }
+
+      const message = ex instanceof Error ? ex.message : 'Tenant yapılandırması alınamadı.'
+      setTenantConfigError(message)
+      setRuntimeStatus({
+        ...initialRuntimeStatus,
+        operation: 'app',
+        phase: 'tenant_config_error',
+        stepKey: 'tenant_config_error',
+        stepIndex: 1,
+        stepCount: 1,
+        isTerminal: true,
+        message,
+        severity: 'error',
+      })
+    })
 
     // Returns the value or JSX produced by this frontend workflow.
     return () => {
@@ -1523,7 +1565,9 @@ function App() {
 
       if (response.source === 'generated' && nextQuestions.length > 0) {
         setReadyQuestions(nextQuestions.slice(0, requestedCount))
-        persistReadyQuestions(nextQuestions)
+        if (tenantConfig.tenantName) {
+          persistReadyQuestions(tenantConfig.tenantName, nextQuestions)
+        }
         return
       }
 
@@ -2200,14 +2244,16 @@ function App() {
     setSettingsError('')
     setIsSettingsLoading(true)
     try {
-      const [settings, uploadSettings, qnaSettings] = await Promise.all([
+      const [settings, uploadSettings, qnaSettings, refreshSettings] = await Promise.all([
         fetchAiSettings(),
         fetchKnowledgeSettings(),
         fetchQnaExperienceSettings(),
+        fetchKnowledgeRefreshSettings(),
       ])
       setAiSettings(settings)
       setKnowledgeUploadSettings(uploadSettings)
       setQnaExperienceSettings(qnaSettings)
+      setKnowledgeRefreshSettings(refreshSettings)
       setDraftProvider(settings.activeProvider)
       setDraftModel(settings.activeModel)
       setDraftMaxFileSizeMb(uploadSettings.maxFileSizeMb)
@@ -2217,6 +2263,8 @@ function App() {
       setDraftDisplayedSuggestedQuestionCount(qnaSettings.displayedSuggestedQuestionCount)
       setDraftAutoSubmitPromptButtons(qnaSettings.autoSubmitPromptButtons)
       setDraftShowAnswerSourceDocumentNames(qnaSettings.showAnswerSourceDocumentNames)
+      setDraftRefreshPeriodValue(refreshSettings.refreshPeriodValue)
+      setDraftRefreshPeriodUnit(refreshSettings.refreshPeriodUnit)
     } catch (ex) {
       setSettingsError(ex instanceof Error ? ex.message : 'Ayarlar alınamadı.')
     } finally {
@@ -2245,8 +2293,10 @@ function App() {
       qnaExperienceSettings.displayedSuggestedQuestionCount !== draftDisplayedSuggestedQuestionCount ||
       qnaExperienceSettings.autoSubmitPromptButtons !== draftAutoSubmitPromptButtons ||
       qnaExperienceSettings.showAnswerSourceDocumentNames !== draftShowAnswerSourceDocumentNames
+    const refreshChanged = knowledgeRefreshSettings.refreshPeriodValue !== draftRefreshPeriodValue ||
+      knowledgeRefreshSettings.refreshPeriodUnit !== draftRefreshPeriodUnit
 
-    if ((!aiSettings || !aiChanged) && (!knowledgeUploadSettings || !uploadChanged) && !qnaChanged) {
+    if ((!aiSettings || !aiChanged) && (!knowledgeUploadSettings || !uploadChanged) && !qnaChanged && !refreshChanged) {
       setIsSettingsOpen(false)
       return
     }
@@ -2255,6 +2305,7 @@ function App() {
       ...(aiSettings && aiSettings.activeProvider !== draftProvider ? ['AI tedarikçisi güncelleniyor'] : []),
       ...(aiSettings && aiSettings.activeModel !== draftModel ? ['AI modeli güncelleniyor'] : []),
       ...(qnaChanged ? ['Soru-cevap deneyimi ayarları güncelleniyor'] : []),
+      ...(refreshChanged ? ['Bilgi kaynaklarının yenilenme sıklığı güncelleniyor'] : []),
       ...(uploadChanged ? ['Dosya yükleme limitleri güncelleniyor'] : []),
       'Ayarlar kalıcı olarak kaydediliyor',
       'Ayarlar uygulandı',
@@ -2295,6 +2346,12 @@ function App() {
         setLatestSuggestedQuestions((current) => current.slice(0, nextQnaSettings.displayedSuggestedQuestionCount))
         await loadReadyQuestions(nextQnaSettings.displayedReadyQuestionCount)
       }
+      if (refreshChanged) {
+        const nextRefreshSettings = await updateKnowledgeRefreshSettings(draftRefreshPeriodValue, draftRefreshPeriodUnit)
+        setKnowledgeRefreshSettings(nextRefreshSettings)
+        setDraftRefreshPeriodValue(nextRefreshSettings.refreshPeriodValue)
+        setDraftRefreshPeriodUnit(nextRefreshSettings.refreshPeriodUnit)
+      }
       if (nextAiSettings) {
         setDraftProvider(nextAiSettings.activeProvider)
         setDraftModel(nextAiSettings.activeModel)
@@ -2321,8 +2378,8 @@ function App() {
   closeSettingsPageRef.current = closeSettingsPage
 
   const canAskQuestion = useMemo(
-    () => !isStreaming && visibleRuntimeStatus.phase !== 'app_loading',
-    [isStreaming, visibleRuntimeStatus.phase],
+    () => !tenantConfigError && !isStreaming && visibleRuntimeStatus.phase !== 'app_loading',
+    [isStreaming, tenantConfigError, visibleRuntimeStatus.phase],
   )
   const canSend = useMemo(() => canAskQuestion && input.trim().length > 1, [canAskQuestion, input])
 
@@ -2766,6 +2823,8 @@ function App() {
       </header>
 
       <main className="workspace" id="main-content">
+        {tenantConfigError ? <p className="error-banner" role="alert">{tenantConfigError}</p> : null}
+
         <section className="question-panel" aria-labelledby="question-title">
           <div className="assistant-intro-card" aria-label={`${tenantConfig.uiWebAssistantName} karşılama mesajı`}>
             <span className="assistant-intro-icon" aria-hidden="true">
@@ -4037,9 +4096,40 @@ function App() {
                   <FileText size={18} aria-hidden="true" />
                   <div>
                     <strong>Bilgi Bankası</strong>
-                    <p>Dosya Yükleme Limitleri</p>
+                    <p>Yenilenme ve dosya yükleme limitleri</p>
                   </div>
                 </div>
+
+                <label>
+                  <span>Bilgi kaynaklarının yenilenme sıklığı</span>
+                  <select
+                    value={draftRefreshPeriodValue}
+                    onChange={(event) => setDraftRefreshPeriodValue(Number(event.target.value))}
+                    disabled={isSavingSettings}
+                  >
+                    {Array.from({ length: selectedRefreshPeriodUnit.max }, (_, index) => index + 1).map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>Yenilenme birimi</span>
+                  <select
+                    value={draftRefreshPeriodUnit}
+                    onChange={(event) => {
+                      const nextUnit = event.target.value as KnowledgeRefreshSettingsResponse['refreshPeriodUnit']
+                      const nextMax = refreshPeriodUnitOptions.find((option) => option.value === nextUnit)?.max ?? 24
+                      setDraftRefreshPeriodUnit(nextUnit)
+                      setDraftRefreshPeriodValue((current) => Math.min(current, nextMax))
+                    }}
+                    disabled={isSavingSettings}
+                  >
+                    {refreshPeriodUnitOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
 
                 <label>
                   <span>Maksimum dosya boyutu (MB)</span>

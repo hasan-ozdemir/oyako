@@ -74,6 +74,11 @@ export interface KnowledgeBankSource {
   statusMessage: string
   webPageAdditionMode: 'automatic' | 'manual' | string
   webPageAdditionModeLabel: string
+  isSeedManaged: boolean
+  autoRefreshEnabled: boolean
+  refreshPeriodMinutes: number
+  lastRefreshAtUtc: string | null
+  nextRefreshAtUtc: string | null
   documentCount: number
   activeDocumentCount: number
   lastCheckedAtUtc: string | null
@@ -387,5 +392,13 @@ export interface QnaExperienceSettingsResponse {
   displayedSuggestedQuestionCount: number
   autoSubmitPromptButtons: boolean
   showAnswerSourceDocumentNames: boolean
+  updatedAtUtc: string
+}
+
+// Defines the TypeScript contract used by the Oyako frontend.
+export interface KnowledgeRefreshSettingsResponse {
+  refreshPeriodValue: number
+  refreshPeriodUnit: 'minute' | 'hour' | 'day' | 'week'
+  refreshPeriodMinutes: number
   updatedAtUtc: string
 }
