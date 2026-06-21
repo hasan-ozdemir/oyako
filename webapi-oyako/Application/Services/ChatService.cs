@@ -2,6 +2,8 @@
 using webapi_oyako.Domain.Models;
 using webapi_oyako.Domain.Repositories;
 using webapi_oyako.Domain.Services;
+using System.Globalization;
+using System.Text;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
 namespace webapi_oyako.Application.Services;
@@ -9,8 +11,12 @@ namespace webapi_oyako.Application.Services;
 // Implements the ChatService component and its responsibilities in the Oyako codebase.
 public sealed class ChatService : IChatService
 {
+    private const int MaxQuestionPromptBlocks = 12;
+    private const int MaxQuestionPromptCharacters = 60000;
     // Stores state or a dependency required by the surrounding component.
     private readonly ISystemInstructionCache _systemInstructionCache;
+    // Stores state or a dependency required by the surrounding component.
+    private readonly IChatPromptBuilder _chatPromptBuilder;
     // Stores state or a dependency required by the surrounding component.
     private readonly IAiChatClient _aiChatClient;
     // Stores state or a dependency required by the surrounding component.
@@ -24,6 +30,7 @@ public sealed class ChatService : IChatService
 
     public ChatService(
         ISystemInstructionCache systemInstructionCache,
+        IChatPromptBuilder chatPromptBuilder,
         IAiChatClient aiChatClient,
         IWebPageRepository webPageRepository,
         IAnswerHtmlSanitizer answerHtmlSanitizer,
@@ -31,6 +38,7 @@ public sealed class ChatService : IChatService
         IRuntimeStatusService runtimeStatusService)
     {
         _systemInstructionCache = systemInstructionCache;
+        _chatPromptBuilder = chatPromptBuilder;
         _aiChatClient = aiChatClient;
         _webPageRepository = webPageRepository;
         _answerHtmlSanitizer = answerHtmlSanitizer;
@@ -64,7 +72,7 @@ public sealed class ChatService : IChatService
 
         var qnaSettings = await _qnaExperienceSettingsService.GetAsync(cancellationToken);
         var prompt = BuildRuntimePrompt(
-            await _systemInstructionCache.GetCurrentAsync(cancellationToken),
+            await BuildQuestionScopedSystemPromptAsync(userMessage, cancellationToken),
             qnaSettings);
         // Creates the object needed for the next step of the workflow.
         var rawAnswer = new System.Text.StringBuilder();
@@ -161,6 +169,134 @@ public sealed class ChatService : IChatService
             {sourceInstruction}
             [/Bu isteğe özel Oyako kullanıcı deneyimi ayarları]
             """;
+    }
+
+    private async Task<string> BuildQuestionScopedSystemPromptAsync(string userMessage, CancellationToken cancellationToken)
+    {
+        var blocks = await _webPageRepository.GetActiveDocumentCacheBlocksAsync(cancellationToken);
+        if (blocks.Count == 0)
+        {
+            return await _systemInstructionCache.GetCurrentAsync(cancellationToken);
+        }
+
+        var selectedBlocks = SelectRelevantBlocks(userMessage, blocks);
+        return _chatPromptBuilder.BuildSystemPrompt(selectedBlocks);
+    }
+
+    private static IReadOnlyList<KnowledgeDocumentCacheBlock> SelectRelevantBlocks(
+        string userMessage,
+        IReadOnlyList<KnowledgeDocumentCacheBlock> blocks)
+    {
+        var terms = BuildSearchTerms(userMessage);
+        if (terms.Count == 0)
+        {
+            return Array.Empty<KnowledgeDocumentCacheBlock>();
+        }
+
+        var selected = new List<KnowledgeDocumentCacheBlock>();
+        var characterBudget = 0;
+        foreach (var candidate in blocks
+            .Select(block => new
+            {
+                Block = block,
+                Score = ScoreBlock(block, terms)
+            })
+            .Where(candidate => candidate.Score > 0)
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Block.DocumentTitle, StringComparer.OrdinalIgnoreCase))
+        {
+            if (selected.Count >= MaxQuestionPromptBlocks)
+            {
+                break;
+            }
+
+            var nextBudget = characterBudget + candidate.Block.PromptBlock.Length;
+            if (selected.Count > 0 && nextBudget > MaxQuestionPromptCharacters)
+            {
+                break;
+            }
+
+            selected.Add(candidate.Block);
+            characterBudget = nextBudget;
+        }
+
+        return selected;
+    }
+
+    private static int ScoreBlock(KnowledgeDocumentCacheBlock block, IReadOnlySet<string> terms)
+    {
+        var titleAndUrl = NormalizeSearchText($"{block.SourceName} {block.DocumentTitle} {block.DocumentUrl}");
+        var content = NormalizeSearchText(block.PromptBlock);
+        var score = 0;
+        foreach (var term in terms)
+        {
+            if (titleAndUrl.Contains(term, StringComparison.Ordinal))
+            {
+                score += 12;
+            }
+
+            if (content.Contains(term, StringComparison.Ordinal))
+            {
+                score += 2;
+            }
+        }
+
+        return score;
+    }
+
+    private static IReadOnlySet<string> BuildSearchTerms(string userMessage)
+    {
+        var terms = NormalizeSearchText(userMessage)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(term => term.Length >= 3 || term.All(char.IsDigit))
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (terms.Any(term => term.StartsWith("generic-tenant", StringComparison.Ordinal)))
+        {
+            terms.Add("generic-tenant");
+        }
+
+        if (terms.Contains("bagis") || terms.Contains("bagisi") || terms.Contains("bagisim") || terms.Contains("bagiscilar"))
+        {
+            foreach (var donationTerm in new[] { "bagis", "bagis-yontemleri", "online", "sms", "banka", "168", "ptt", "sube", "mobil", "kripto", "yurt", "iban" })
+            {
+                terms.Add(donationTerm);
+            }
+        }
+
+        return terms;
+    }
+
+    private static string NormalizeSearchText(string value)
+    {
+        var mapped = value
+            .Replace('ı', 'i')
+            .Replace('İ', 'i')
+            .Replace('ş', 's')
+            .Replace('Ş', 's')
+            .Replace('ğ', 'g')
+            .Replace('Ğ', 'g')
+            .Replace('ü', 'u')
+            .Replace('Ü', 'u')
+            .Replace('ö', 'o')
+            .Replace('Ö', 'o')
+            .Replace('ç', 'c')
+            .Replace('Ç', 'c')
+            .ToLowerInvariant()
+            .Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(mapped.Length);
+        foreach (var character in mapped)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            builder.Append(char.IsLetterOrDigit(character) ? character : ' ');
+        }
+
+        return string.Join(' ', builder.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     // Wraps the user question with a final per-request response contract that the LLM sees after the raw question.

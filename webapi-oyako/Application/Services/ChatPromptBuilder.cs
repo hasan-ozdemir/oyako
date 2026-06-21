@@ -1,5 +1,6 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/Application/Services/ChatPromptBuilder.cs for maintainers.
 using System.Text;
+using webapi_oyako.Domain.Models;
 using webapi_oyako.Domain.Repositories;
 using webapi_oyako.Domain.Services;
 
@@ -22,7 +23,11 @@ public sealed class ChatPromptBuilder : IChatPromptBuilder
     public async Task<string> BuildSystemPromptAsync(CancellationToken cancellationToken)
     {
         var blocks = await _webPageRepository.GetActiveDocumentCacheBlocksAsync(cancellationToken);
+        return BuildSystemPrompt(blocks);
+    }
 
+    public string BuildSystemPrompt(IReadOnlyList<KnowledgeDocumentCacheBlock> blocks)
+    {
         // Guards the following branch so the workflow handles this condition deliberately.
         if (blocks.Count == 0)
         {
