@@ -72,7 +72,7 @@ public class HtmlCrawlerTests
             // Creates the repository stub required by the multi-source crawler workflow.
             new KnowledgeFileParser(),
             // Creates the repository stub required by the multi-source crawler workflow.
-            new StubWebPageRepository());
+            new StubWebPageRepository(CreateSource("https://oyakdijital.com.tr", "Oyak Dijital")));
 
         var result = await crawler.CrawlAsync(CancellationToken.None);
 
@@ -133,7 +133,7 @@ public class HtmlCrawlerTests
             new RenderedTextExtractor(),
             new KnowledgeTextCleaner(),
             new KnowledgeFileParser(),
-            new StubWebPageRepository());
+            new StubWebPageRepository(CreateSource("https://slow.example", "Slow Site")));
 
         var result = await crawler.CrawlAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -180,7 +180,7 @@ public class HtmlCrawlerTests
             new RenderedTextExtractor(),
             new KnowledgeTextCleaner(),
             new KnowledgeFileParser(),
-            new StubWebPageRepository());
+            new StubWebPageRepository(CreateSource("https://retry.example", "Retry Site")));
 
         var result = await crawler.CrawlAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
 
@@ -533,8 +533,25 @@ public class HtmlCrawlerTests
         };
     }
 
+    private static KnowledgeSource CreateSource(string address, string name) => new()
+    {
+        Id = 1,
+        Name = name,
+        SourceType = KnowledgeSourceTypes.WebSite,
+        Address = address,
+        Protocol = Uri.TryCreate(address, UriKind.Absolute, out var uri) ? uri.Scheme : "https",
+        IsEnabled = true
+    };
+
     private sealed class StubWebPageRepository : IWebPageRepository
     {
+        private readonly IReadOnlyList<KnowledgeSource> _sources;
+
+        public StubWebPageRepository(params KnowledgeSource[] sources)
+        {
+            _sources = sources;
+        }
+
         // Executes this component behavior as part of the Oyako application flow.
         public Task InitializeAsync(CancellationToken cancellationToken)
         {
@@ -561,6 +578,11 @@ public class HtmlCrawlerTests
         {
             // Returns the computed result to the caller and completes this branch of the workflow.
             return Task.FromResult<IReadOnlyList<WebPage>>(Array.Empty<WebPage>());
+        }
+
+        public Task<IReadOnlyList<KnowledgeSource>> GetActiveSourcesAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_sources);
         }
 
         // Executes this component behavior as part of the Oyako application flow.

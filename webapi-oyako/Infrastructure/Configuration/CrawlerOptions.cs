@@ -7,7 +7,7 @@ public sealed class CrawlerOptions
     public const string SectionName = "Crawler";
 
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
-    public string SeedUrl { get; set; } = "https://oyakdijital.com.tr";
+    public string SeedUrl { get; set; } = string.Empty;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public int MaxPagesToCrawl { get; set; } = 1000;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.

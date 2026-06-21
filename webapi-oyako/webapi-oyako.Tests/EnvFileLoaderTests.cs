@@ -85,10 +85,28 @@ public sealed class EnvFileLoaderTests
                 Path.Combine(tenantsRoot, "oyakdijital.env"),
                 """
                 tenant_id=013dfb350ed64e324a805eae86646ddf
+                tenant_order_number=1
                 tenant_name=oyakdijital
+                tenant_display_name=Oyak Dijital
+                tenant_azure_domain_name=oyako
+                tenant_web_url=https://www.oyakdijital.com.tr
+                tenant_admin_email=admin@oyakdijital.com.tr
+                tenant_feedback_email=iletisim@oyakdijital.com.tr
                 ui_web_assistant_name=Oyako
                 ui_web_brand_name=Oyak Dijital
                 ui_web_title=%ui_web_assistant_name%: %ui_web_brand_name% Soru-Cevap Platformu
+                ui_web_header_title=%ui_web_brand_name% soru-cevap platformu
+                ui_web_brand_logo_url=https://www.oyakdijital.com.tr/logo.svg
+                ui_web_assistant_welcome_message=Merhaba, ben %ui_web_assistant_name%.
+                ui_web_assistant_header_title=%ui_web_brand_name% hakkında sorun:
+                ui_web_knowledge_bank_header_title=Bilgi Bankası
+                ui_web_knowledge_source_header_title=Bilgi Kaynakları
+                ui_web_knowledge_source_header_message=Aşağıda {sourceCount} kaynak ve {documentCount} belge var.
+                ui_web_knowledge_sources_table_title=Şu kaynaklar kullanılabilir:
+                ui_web_knowledge_documents_table_title=Şu belgeler kullanılabilir:
+                tenant_knowledge_source_1_type=web_site
+                tenant_knowledge_source_1_url=https://www.oyakdijital.com.tr
+                tenant_knowledge_source_1_refresh_period=1hour
                 primary_ai_provider=ollama-cloud
                 secondary_ai_provider=azure-cloud
                 ai_provider_ollama_cloud_model=minimax-m3:cloud
@@ -104,16 +122,37 @@ public sealed class EnvFileLoaderTests
             Assert.Equal("azure", Environment.GetEnvironmentVariable("Ai__FallbackProviders__0"));
             Assert.Equal("minimax-m3:cloud", Environment.GetEnvironmentVariable("OllamaCloud__Models__0"));
             Assert.Equal("deepseek-v4-flash", Environment.GetEnvironmentVariable("AzureAi__Deployments__0"));
+            Assert.Equal("web_site", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Type"));
+            Assert.Equal("https://www.oyakdijital.com.tr", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Url"));
+            Assert.Equal("1hour", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__RefreshPeriod"));
         }
         finally
         {
             foreach (var key in new[]
             {
                 "tenant_id",
+                "tenant_order_number",
                 "tenant_name",
+                "tenant_display_name",
+                "tenant_azure_domain_name",
+                "tenant_web_url",
+                "tenant_admin_email",
+                "tenant_feedback_email",
                 "ui_web_assistant_name",
                 "ui_web_brand_name",
                 "ui_web_title",
+                "ui_web_header_title",
+                "ui_web_brand_logo_url",
+                "ui_web_assistant_welcome_message",
+                "ui_web_assistant_header_title",
+                "ui_web_knowledge_bank_header_title",
+                "ui_web_knowledge_source_header_title",
+                "ui_web_knowledge_source_header_message",
+                "ui_web_knowledge_sources_table_title",
+                "ui_web_knowledge_documents_table_title",
+                "tenant_knowledge_source_1_type",
+                "tenant_knowledge_source_1_url",
+                "tenant_knowledge_source_1_refresh_period",
                 "primary_ai_provider",
                 "secondary_ai_provider",
                 "ai_provider_ollama_cloud_model",
@@ -124,6 +163,11 @@ public sealed class EnvFileLoaderTests
                 "Ai__FallbackProviders__0",
                 "OllamaCloud__Models__0",
                 "AzureAi__Deployments__0",
+                "Tenant__KnowledgeSources__0__Key",
+                "Tenant__KnowledgeSources__0__Type",
+                "Tenant__KnowledgeSources__0__Url",
+                "Tenant__KnowledgeSources__0__RefreshPeriod",
+                "Crawler__SeedUrl",
                 "OYAKO_TENANT_NAME"
             })
             {

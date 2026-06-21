@@ -7,6 +7,12 @@ namespace webapi_oyako.Infrastructure.Configuration;
 // Implements the EnvFileLoader component and its responsibilities in the Oyako codebase.
 public static class EnvFileLoader
 {
+    private static readonly HashSet<string> SupportedTenantNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "oyakdijital",
+        "generictenant"
+    };
+
     private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["domain_only_crawling"] = ["Crawler__DomainOnlyCrawling"],
@@ -47,6 +53,9 @@ public static class EnvFileLoader
     };
 
     private static readonly Regex EnvReferencePattern = new("%([A-Za-z0-9_]+)%", RegexOptions.Compiled);
+    private static readonly Regex TenantKnowledgeSourcePattern = new(
+        @"^tenant_knowledge_source_(?<index>[1-9][0-9]*)_(?<field>type|url|refresh_period|name|description|enabled)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // Loads each explicitly supported environment file and keeps the last file as the highest-precedence file.
     public static void LoadMany(IEnumerable<string> fileNames, string contentRootPath)
@@ -73,18 +82,44 @@ public static class EnvFileLoader
     public static void LoadTenant(string contentRootPath)
     {
         var tenantName = ResolveTenantName();
-        Load(Path.Combine(".tenants", $"{tenantName}.env"), contentRootPath);
+        if (!SupportedTenantNames.Contains(tenantName))
+        {
+            throw new InvalidOperationException($"Unsupported tenant '{tenantName}'. Supported tenants: {string.Join(", ", SupportedTenantNames.OrderBy(static tenant => tenant))}.");
+        }
+
+        var tenantFileName = Path.Combine(".tenants", $"{tenantName}.env");
+        if (FindEnvFile(tenantFileName, contentRootPath) is null && HasTenantEnvironment(tenantName))
+        {
+            LoadAliasesFromEnvironment();
+            return;
+        }
+
+        LoadRequired(tenantFileName, contentRootPath);
     }
 
     // Executes this component behavior as part of the Oyako application flow.
     public static void Load(string fileName, string contentRootPath)
     {
+        LoadCore(fileName, contentRootPath, required: false);
+    }
+
+    private static void LoadRequired(string fileName, string contentRootPath)
+    {
+        LoadCore(fileName, contentRootPath, required: true);
+    }
+
+    private static void LoadCore(string fileName, string contentRootPath, bool required)
+    {
         var filePath = FindEnvFile(fileName, contentRootPath);
         // Guards the following branch so the workflow handles this condition deliberately.
         if (filePath is null)
         {
-            // Returns the computed result to the caller and completes this branch of the workflow.
-            return;
+            if (!required)
+            {
+                return;
+            }
+
+            throw new FileNotFoundException($"Required environment file was not found: {fileName}");
         }
 
         // Iterates through the collection to process each item consistently.
@@ -116,6 +151,11 @@ public static class EnvFileLoader
             parsedValues[key] = value;
             SetEnvironmentValue(key, ExpandReferences(value, parsedValues));
         }
+
+        if (fileName.Replace('\\', '/').StartsWith(".tenants/", StringComparison.OrdinalIgnoreCase))
+        {
+            ValidateTenantKnowledgeSourceIndexes(parsedValues, filePath);
+        }
     }
 
     private static void SetEnvironmentValue(string key, string value)
@@ -123,12 +163,92 @@ public static class EnvFileLoader
         Environment.SetEnvironmentVariable(key, value);
         if (!Aliases.TryGetValue(key, out var mappedKeys))
         {
+            SetTenantKnowledgeSourceValue(key, value);
             return;
         }
 
         foreach (var mappedKey in mappedKeys)
         {
             Environment.SetEnvironmentVariable(mappedKey, NormalizeAliasValue(mappedKey, value));
+        }
+    }
+
+    private static void SetTenantKnowledgeSourceValue(string key, string value)
+    {
+        var match = TenantKnowledgeSourcePattern.Match(key);
+        if (!match.Success)
+        {
+            return;
+        }
+
+        var sourceIndex = int.Parse(match.Groups["index"].Value) - 1;
+        var field = match.Groups["field"].Value.ToLowerInvariant() switch
+        {
+            "type" => "Type",
+            "url" => "Url",
+            "refresh_period" => "RefreshPeriod",
+            "name" => "Name",
+            "description" => "Description",
+            "enabled" => "Enabled",
+            _ => string.Empty
+        };
+
+        if (field.Length == 0)
+        {
+            return;
+        }
+
+        Environment.SetEnvironmentVariable($"Tenant__KnowledgeSources__{sourceIndex}__Key", $"source_{sourceIndex + 1}");
+        Environment.SetEnvironmentVariable($"Tenant__KnowledgeSources__{sourceIndex}__{field}", value);
+
+        if (sourceIndex == 0 && field == "Url")
+        {
+            Environment.SetEnvironmentVariable("Crawler__SeedUrl", value);
+        }
+    }
+
+    private static void ValidateTenantKnowledgeSourceIndexes(IReadOnlyDictionary<string, string> parsedValues, string filePath)
+    {
+        var indexes = parsedValues.Keys
+            .Select(key => TenantKnowledgeSourcePattern.Match(key))
+            .Where(match => match.Success)
+            .Select(match => int.Parse(match.Groups["index"].Value))
+            .Distinct()
+            .OrderBy(static index => index)
+            .ToArray();
+
+        if (indexes.Length == 0)
+        {
+            throw new InvalidOperationException($"Tenant env file must declare at least tenant_knowledge_source_1_type/url/refresh_period: {filePath}");
+        }
+
+        for (var expected = 1; expected <= indexes[^1]; expected++)
+        {
+            if (!indexes.Contains(expected))
+            {
+                throw new InvalidOperationException($"Tenant env file has a gap in tenant_knowledge_source_N_* indexes. Missing index: {expected}. File: {filePath}");
+            }
+        }
+    }
+
+    private static bool HasTenantEnvironment(string tenantName)
+    {
+        return string.Equals(Environment.GetEnvironmentVariable("tenant_name"), tenantName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable("Tenant__Name"), tenantName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void LoadAliasesFromEnvironment()
+    {
+        var values = Environment.GetEnvironmentVariables()
+            .Keys
+            .OfType<string>()
+            .ToDictionary(key => key, key => Environment.GetEnvironmentVariable(key) ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in values.Keys.ToArray())
+        {
+            if (Aliases.ContainsKey(key) || TenantKnowledgeSourcePattern.IsMatch(key))
+            {
+                SetEnvironmentValue(key, ExpandReferences(values[key], values));
+            }
         }
     }
 

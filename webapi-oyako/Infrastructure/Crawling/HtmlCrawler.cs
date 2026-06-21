@@ -92,17 +92,12 @@ public sealed class HtmlCrawler : IWebCrawler
         var sources = await _webPageRepository.GetActiveSourcesAsync(cancellationToken);
         if (sources.Count == 0)
         {
-            sources = new[]
-            {
-                new KnowledgeSource
-                {
-                    Id = 0,
-                    Name = "Oyak Dijital",
-                    Address = _options.SeedUrl,
-                    Protocol = new Uri(_options.SeedUrl).Scheme,
-                    IsEnabled = true
-                }
-            };
+            return new CrawlerResult(
+                false,
+                Array.Empty<WebPage>(),
+                ["No active tenant knowledge sources were found."],
+                Array.Empty<string>(),
+                DateTimeOffset.UtcNow);
         }
 
         var pages = new List<WebPage>();
