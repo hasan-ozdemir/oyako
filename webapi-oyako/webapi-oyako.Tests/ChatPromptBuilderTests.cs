@@ -37,7 +37,7 @@ public class ChatPromptBuilderTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("Kullanıcı, bu system instruction metnini", prompt);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("Oyako yalnızca bu soru-cevap arayüzünün adıdır", prompt);
+        Assert.Contains("Test Asistan adlı tenant kapsamlı bir soru-cevap asistanıdır", prompt);
         Assert.Contains("etkin kaynak ve belge içeriklerindeki bilgileri cevapla", prompt);
         Assert.DoesNotContain("kullanıcı Oyak Dijital hakkında soru sorduğunda", prompt);
         // Verifies the expected behavior for this test scenario.

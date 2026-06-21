@@ -1,10 +1,12 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/webapi-oyako.Tests/ReadyQuestionServiceTests.cs for maintainers.
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using webapi_oyako.Application.Services;
 using webapi_oyako.Domain.Entities;
 using webapi_oyako.Domain.Models;
 using webapi_oyako.Domain.Repositories;
 using webapi_oyako.Domain.Services;
+using webapi_oyako.Infrastructure.Configuration;
 using Xunit;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
@@ -105,7 +107,7 @@ public class ReadyQuestionServiceTests
         // Verifies the expected behavior for this test scenario.
         Assert.Equal(100, repository.Questions.Count);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(repository.Questions, question => question.Text.Contains("Kaynak 1 hakkında", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(repository.Questions, question => question.Text.Contains("Kaynak 1", StringComparison.OrdinalIgnoreCase));
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain(repository.Questions, question => question.Text == "Eski soru?");
     }
@@ -142,7 +144,7 @@ public class ReadyQuestionServiceTests
         // Verifies the expected behavior for this test scenario.
         Assert.Equal(100, repository.Questions.Count);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(repository.Questions, question => question.Text.Contains("Belge 1 hakkında", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(repository.Questions, question => question.Text.Contains("Belge 1", StringComparison.OrdinalIgnoreCase));
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain(repository.Questions, question => question.Text == "Eski soru?");
     }
@@ -229,6 +231,7 @@ public class ReadyQuestionServiceTests
         services.AddSingleton<IReadyQuestionRepository>(new InMemoryReadyQuestionRepository(questions));
         // Creates the object needed for the next step of the workflow.
         services.AddSingleton(aiChatClient);
+        services.AddSingleton<IOptions<TenantOptions>>(Options.Create(CreateTestTenantOptions()));
         // Registers or maps application behavior into the runtime pipeline.
         services.AddSingleton<IRuntimeStatusService, RuntimeStatusService>();
         // Registers or maps application behavior into the runtime pipeline.
@@ -236,6 +239,40 @@ public class ReadyQuestionServiceTests
         // Returns the computed result to the caller and completes this branch of the workflow.
         return services.BuildServiceProvider();
     }
+
+    private static TenantOptions CreateTestTenantOptions() => new()
+    {
+        Id = "013dfb35-0ed6-4e32-4a80-5eae86646ddf",
+        OrderNumber = 1,
+        Name = "oyakdijital",
+        DisplayName = "Oyak Dijital",
+        AzureDomainName = "oyako",
+        WebUrl = "https://www.oyakdijital.com.tr",
+        AdminEmail = "admin@oyakdijital.com.tr",
+        FeedbackEmail = "iletisim@oyakdijital.com.tr",
+        UiWebBrandName = "Oyak Dijital",
+        UiWebAssistantName = "Oyako",
+        UiWebTitle = "Oyako: Oyak Dijital Soru-Cevap Platformu",
+        UiWebHeaderTitle = "Oyak Dijital soru-cevap platformu",
+        UiWebBrandLogoUrl = "https://www.oyakdijital.com.tr/logo.svg",
+        UiWebAssistantWelcomeMessage = "Merhaba, ben Oyako.",
+        UiWebAssistantHeaderTitle = "Oyak Dijital hakkında sorun:",
+        UiWebKnowledgeBankHeaderTitle = "Bilgi Bankası",
+        UiWebKnowledgeSourceHeaderTitle = "Bilgi Kaynakları",
+        UiWebKnowledgeSourceHeaderMessage = "Aşağıda {sourceCount} kaynak ve {documentCount} belge var.",
+        UiWebKnowledgeSourcesTableTitle = "Şu kaynaklar kullanılabilir:",
+        UiWebKnowledgeDocumentsTableTitle = "Şu belgeler kullanılabilir:",
+        KnowledgeSources =
+        [
+            new TenantKnowledgeSourceOptions
+            {
+                Key = "source_1",
+                Type = "web_site",
+                Url = "https://www.oyakdijital.com.tr",
+                RefreshPeriod = "1hour"
+            }
+        ]
+    };
 
     private sealed class InMemoryReadyQuestionRepository : IReadyQuestionRepository
     {

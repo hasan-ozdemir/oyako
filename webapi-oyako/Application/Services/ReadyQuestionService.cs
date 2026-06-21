@@ -3,10 +3,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using webapi_oyako.Domain.Entities;
 using webapi_oyako.Domain.Models;
 using webapi_oyako.Domain.Repositories;
 using webapi_oyako.Domain.Services;
+using webapi_oyako.Infrastructure.Configuration;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
 namespace webapi_oyako.Application.Services;
@@ -109,6 +111,13 @@ public sealed partial class ReadyQuestionService : IReadyQuestionService
             var readyQuestionRepository = scope.ServiceProvider.GetRequiredService<IReadyQuestionRepository>();
             var aiChatClient = scope.ServiceProvider.GetRequiredService<IAiChatClient>();
             var runtimeStatusService = scope.ServiceProvider.GetRequiredService<IRuntimeStatusService>();
+            var tenantOptions = scope.ServiceProvider.GetService<IOptions<TenantOptions>>()?.Value ?? new TenantOptions
+            {
+                Name = "test",
+                DisplayName = "Test Tenant",
+                UiWebBrandName = "Test Tenant",
+                UiWebAssistantName = "Test Asistan"
+            };
 
             var pages = await webPageRepository.GetAllPagesAsync(cancellationToken);
             // Guards the following branch so the workflow handles this condition deliberately.
@@ -152,8 +161,8 @@ public sealed partial class ReadyQuestionService : IReadyQuestionService
             try
             {
                 var response = await aiChatClient.CompleteChatAsync(
-                    BuildSystemInstruction(),
-                    BuildKnowledgePayload(pages),
+                    BuildSystemInstruction(tenantOptions),
+                    BuildKnowledgePayload(pages, tenantOptions),
                     cancellationToken);
                 generatedQuestions = ParseQuestions(response, pages);
             }
@@ -259,10 +268,12 @@ public sealed partial class ReadyQuestionService : IReadyQuestionService
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static string BuildSystemInstruction()
+    private static string BuildSystemInstruction(TenantOptions tenantOptions)
     {
-        return """
-            Sen Oyako uygulaması için hazır soru üreticisisin.
+        return $"""
+            Sen {tenantOptions.UiWebAssistantName} uygulaması için hazır soru üreticisisin.
+            Aktif tenant: {tenantOptions.DisplayName} ({tenantOptions.Name}).
+            Marka/kurum adı: {tenantOptions.UiWebBrandName}.
             Yalnızca sana verilen etkin bilgi kaynağı ve belge içeriklerine dayanarak Türkçe hazır sorular üret.
             Dış bilgi, tahmin, halüsinasyon veya web içeriğinde olmayan konu kullanma.
             Tam olarak 100 adet kısa, anlaşılır, kullanıcıların etkin bilgi kaynakları hakkında sorabileceği soru üret.
@@ -277,11 +288,11 @@ public sealed partial class ReadyQuestionService : IReadyQuestionService
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static string BuildKnowledgePayload(IReadOnlyList<WebPage> pages)
+    private static string BuildKnowledgePayload(IReadOnlyList<WebPage> pages, TenantOptions tenantOptions)
     {
         // Creates the object needed for the next step of the workflow.
         var text = new StringBuilder();
-        text.AppendLine("Aşağıdaki etkin bilgi kaynağı içeriklerinden 100 adet hazır soru üret:");
+        text.AppendLine($"Aşağıdaki {tenantOptions.DisplayName} tenant'ına ait etkin bilgi kaynağı içeriklerinden 100 adet hazır soru üret:");
         text.AppendLine();
 
         // Iterates through the collection to process each item consistently.
@@ -422,8 +433,6 @@ public sealed partial class ReadyQuestionService : IReadyQuestionService
     private static string BuildQuestionTopic(WebPage page)
     {
         var title = string.IsNullOrWhiteSpace(page.WebTitle) ? BuildTitleFromUrl(page.WebSourceUrl) : page.WebTitle!;
-        title = title.Replace("| OYAK Dijital", string.Empty, StringComparison.OrdinalIgnoreCase);
-        title = title.Replace("OYAK Dijital", string.Empty, StringComparison.OrdinalIgnoreCase);
         title = WhitespaceRegex().Replace(title, " ").Trim(' ', '-', '|', ':');
         // Returns the computed result to the caller and completes this branch of the workflow.
         return string.IsNullOrWhiteSpace(title) ? "Bilgi kaynağı" : title;

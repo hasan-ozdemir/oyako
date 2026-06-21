@@ -163,11 +163,11 @@ public sealed class ChatService : IChatService
         return $"""
             {basePrompt}
 
-            [Bu isteğe özel Oyako kullanıcı deneyimi ayarları]
+            [Bu isteğe özel kullanıcı deneyimi ayarları]
             Önerilen sorular bölümünde en fazla {settings.DisplayedSuggestedQuestionCount} soru ver.
             Cevap gövdesinde e-posta, telefon, SMS, WhatsApp, web sitesi, web sayfası, adres, konum, koordinat veya açık sosyal medya/platform URL bilgisi varsa kompakt markdown link ver: [metin](mailto:...), [metin](tel:+...), [metin](sms:+...), [metin](https://wa.me/...), [metin](https://...), [tam adres](https://www.google.com/maps/search/?api=1&query=...). Yeni iletişim bilgisi uydurma.
             {sourceInstruction}
-            [/Bu isteğe özel Oyako kullanıcı deneyimi ayarları]
+            [/Bu isteğe özel kullanıcı deneyimi ayarları]
             """;
     }
 
@@ -250,19 +250,6 @@ public sealed class ChatService : IChatService
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(term => term.Length >= 3 || term.All(char.IsDigit))
             .ToHashSet(StringComparer.Ordinal);
-
-        if (terms.Any(term => term.StartsWith("generic-tenant", StringComparison.Ordinal)))
-        {
-            terms.Add("generic-tenant");
-        }
-
-        if (terms.Contains("bagis") || terms.Contains("bagisi") || terms.Contains("bagisim") || terms.Contains("bagiscilar"))
-        {
-            foreach (var donationTerm in new[] { "bagis", "bagis-yontemleri", "online", "sms", "banka", "168", "ptt", "sube", "mobil", "kripto", "yurt", "iban" })
-            {
-                terms.Add(donationTerm);
-            }
-        }
 
         return terms;
     }
