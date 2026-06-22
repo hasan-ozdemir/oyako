@@ -1,11 +1,9 @@
 # Oyako Agent Guide
 
 ## Mission
-
 Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeScript + Vite SPA and an ASP.NET 10 Web API with portable SQLite. The assistant answers from enabled knowledge sources and documents, using one-shot AI calls through Azure, Ollama Cloud, or Ollama Local depending on configuration.
 
 ## Repository Map
-
 - `webapi-oyako/`: ASP.NET backend, Domain/Application/Infrastructure/Presentation layers, SQLite bootstrap, crawler/scraper, AI providers, tests.
 - `webapp-oyako/`: React SPA/PWA, Turkish UI, accessibility-first dialogs, source/document management, Playwright tests.
 - `docs/`: architecture, CI/CD/CT, and UI production-readiness notes.
@@ -13,20 +11,17 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - `run-app.cmd`: local backend/frontend launcher.
 
 ## Language Rules
-
 - Code identifiers, comments, API contracts, class names, method names, and filenames stay English.
 - User-facing UI strings, help text, runtime status labels, and assistant-facing Turkish product instructions stay Turkish.
-- Do not add legacy compatibility paths during pre-alpha cutovers. The newest requested behavior is the primary behavior.
+- Do not add legacy compatibility paths at all. The newest requested behavior is the primary behavior.
 
 ## Safety Rules
-
-- Never commit real secrets: `.tenants/*.env`, `oyako.env`, `azure.env`, `azure-cloud.env`, `ollama.env`, `ollama-cloud.env`, certificates, SQLite files, logs, runtime data, or uploaded raw files.
-- Commit only safe `.env.example` files.
+- Never commit real secrets: `*.env`, `.tenants/*.env`, certificates, SQLite files, logs, runtime data, or uploaded raw files.
+- Commit only safe template files such as `.tenants/.template.env.example`; do not reintroduce root provider env examples unless the user explicitly asks.
 - Keep `webapi-oyako/Data/`, `.certificates/`, `node_modules/`, `dist/`, `bin/`, `obj/`, and Playwright artifacts out of Git.
 - Before public push, scan staged content for API keys, private keys, connection strings, and generated data.
 
 ## Backend Conventions
-
 - Preserve Clean Architecture boundaries: Domain has contracts and core vocabulary; Application coordinates workflows; Infrastructure owns SQLite/HTTP/browser/AI implementations; Presentation exposes minimal APIs.
 - SQLite must bootstrap itself code-first in an empty environment.
 - Knowledge source/document mutations must immediately update active knowledge cache when they affect enabled, non-archived content.
@@ -36,7 +31,6 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - AI calls for Q&A remain one-shot: system instruction plus one user message, no provider-side chat history.
 
 ## Frontend Conventions
-
 - All popups are modal and accessible. They must trap focus, close predictably, and restore focus.
 - Dialog action order should place the primary action before cancel where requested.
 - Text inputs and textareas must not lose focus or close dialogs while typing.
@@ -45,7 +39,6 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - Tables use external semantic headings, not table captions as visible section titles.
 
 ## Test Commands
-
 - Backend: `dotnet test webapi-oyako/webapi-oyako.Tests/webapi-oyako.Tests.csproj`
 - Backend build: `dotnet build webapi-oyako/webapi-oyako.csproj`
 - Frontend install: `npm ci --prefix webapp-oyako`
@@ -54,7 +47,6 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - Frontend UI tests: `npm run test:ui --prefix webapp-oyako`
 
 ## Docker and Azure
-
 - Local Docker can include local-development behavior.
 - Azure Container Apps image must include Azure and Ollama Cloud providers; Ollama Local is disabled in Azure.
 - `deploy-aca.cmd` deploys one image: `<tenant_name>-<tenant_order_number>:latest`.
@@ -65,13 +57,11 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 - Tenant discovery is `.tenants/*.env` traversal. Do not add code-level tenant allow-lists; use `tenant_enabled=true` in the tenant env file to activate a tenant.
 
 ## Documentation Discipline
-
 - Update README and docs whenever public behavior, script usage, deploy flow, API behavior, or user workflow changes.
 - Keep help content Turkish and aligned with the latest UI.
 - Prefer concise, explicit comments that explain purpose and workflow decisions.
 
 ## Commit Discipline
-
 - After every user prompt, if any code or file change is made, analyze all changes immediately before giving the user a summary.
 - Split changes into the smallest logical parts and record each part as a separate atomic git commit.
 - Commit messages must be contextual, developer-friendly, detailed, and descriptive.

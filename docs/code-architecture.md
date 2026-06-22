@@ -17,6 +17,7 @@ The repository has two primary applications and shared operational files.
 - `Dockerfile`: production single-process image that serves the React SPA from ASP.NET `wwwroot` on port `8080`.
 - `deploy-aca.cmd` and `deploy-awa.cmd`: minimal Azure deployment scripts for Container Apps and direct Linux Web App hosting.
 - `.tenants/<tenant-name>.env`: local tenant configuration source for branding, tenant IDs, Azure names, AI provider defaults, crawler limits, and SQLite path.
+- `.tenants/.template.env.example`: the only committed tenant env template; copy it to a real ignored tenant file when adding a tenant.
 - `azure-cloud.env` and `ollama-cloud.env`: local-only cloud provider secret sources.
 
 Generated folders such as `bin`, `obj`, `node_modules`, `dist`, and Playwright artifacts are not part of source architecture.
@@ -203,6 +204,7 @@ Full-stack validation starts backend and frontend, checks health endpoints, opti
 - Single-host/container port: 8080.
 - SQLite is portable and hosted by the web API. Azure deploy scripts keep it as a local file inside the app/container and do not create external managed database resources.
 - `.tenants/<tenant-name>.env` supplies tenant-specific runtime configuration; cloud provider secrets stay in ignored provider env files.
+- `.tenants/.template.env.example` documents every required tenant key. A new tenant starts by copying this template, aligning the filename with `tenant_name`, setting tenant-specific branding and knowledge-source values, then enabling it with `tenant_enabled=true`.
 - `azure-cloud.env` and `ollama-cloud.env` supply cloud deployment secrets at deploy time and must not be committed.
 - Azure/Ollama Cloud are deployment-capable providers; Ollama Local is disabled for Azure-hosted runs.
 - Knowledge refresh may call external web resources and AI providers, so tests should distinguish fast mock tests from slower special tests.

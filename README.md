@@ -21,6 +21,14 @@ The local script discovers tenants by traversing `.tenants/*.env`, uses `oyakdij
 
 Tenant env files also seed the baseline website knowledge source for that tenant through `tenant_knowledge_source_1_type`, `tenant_knowledge_source_1_url`, and `tenant_knowledge_source_1_refresh_period`. Background refresh applies only to these env-managed seed website sources; admin-added sources and documents stay tenant-local and are preserved.
 
+## Tenant Configuration
+
+Tenant discovery is file-based. Copy `.tenants/.template.env.example` to `.tenants/<tenant-name>.env`, then set `tenant_name` to the same `<tenant-name>` value. Keep the copied file ignored by Git.
+
+For a new tenant, fill in the tenant identity, Azure DNS name, optional custom domain, public brand URL, admin/feedback email addresses, AI provider defaults, website seed source, text-cleaner terms, SQLite path, and every `ui_web_*` branding string. Set `tenant_enabled=true` only after the tenant file is complete. The scripts reject disabled tenants and files whose name does not match `tenant_name`.
+
+Tenant brand logos are expected under `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` when `ui_web_brand_logo_url=/tenants/<tenant-name>/brand-logo.svg` is used.
+
 ## Docker Development
 
 ```powershell
@@ -36,6 +44,8 @@ The Docker flow builds the frontend and backend into one local container image a
 ```
 
 The Container Apps script uses Azure CLI, Docker Desktop, `azure-cloud.env`, `ollama-cloud.env`, and a discovered enabled `.tenants/<tenant>.env`. It targets subscription `az2vs`, tenant resource group `rg-<tenant_id>-<tenant_order_number>`, and `italynorth`; creates deterministic ACR `acr<tenant_order_number><tenant_id>`; builds and pushes only `<tenant_name>-<tenant_order_number>:latest`; and verifies the ACR contains exactly one repository and one `latest` tag. Pass `--tenant-name <tenant>` or `-t <tenant>`; the default is `oyakdijital`.
+
+Use `.\deploy-aca.cmd --tenant-name <tenant> --local-image-only` to validate tenant config and build the local Docker image without Azure login, ACR push, or Container Apps mutation.
 
 ## Azure Web App Deployment
 
@@ -55,6 +65,7 @@ Real `.env` files, including `.tenants/*.env`, SQLite databases, generated certi
 
 - `docs/code-architecture.md`: backend, frontend, data flow, AI provider, and testing architecture.
 - `docs/ci-cd-ct.md`: GitHub Actions and Azure DevOps CI/CD/CT blueprint.
+- `docs/DEPLOYMENT_NOTES.md`: Azure deployment, tenant resource naming, and no-external-storage/database notes.
 - `docs/ui-production-readiness.md`: responsive, accessibility, and production-readiness checklist.
 - `AGENTS.md`: practical operating rules for future Codex/agent work.
 

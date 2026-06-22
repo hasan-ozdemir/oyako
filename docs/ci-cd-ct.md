@@ -147,6 +147,7 @@ Secrets must not be committed.
 - Azure DevOps should use Library variable groups or Azure Key Vault integration.
 - Azure AI API keys should map to the same environment variable naming expected by backend options.
 - `.tenants/<tenant-name>.env` is for local tenant runtime configuration and is ignored by Git. It must include at least one indexed `tenant_knowledge_source_N_*` seed website source.
+- New tenant files should be created from `.tenants/.template.env.example`; do not commit tenant-specific env examples or root provider env examples.
 - `azure-cloud.env` and `ollama-cloud.env` are local-only provider secret files.
 
 ### 6.4 Deployment Targets
@@ -157,6 +158,8 @@ Current minimal deployment targets:
 - `deploy-awa.cmd`: per-tenant resource group, one Linux Basic B1 App Service Plan and one Azure Web App in `italynorth`, using direct ZIP deploy from locally published `linux-x64` source and startup-time Playwright dependency installation.
 
 Both targets serve the React SPA and ASP.NET API from one public hostname, keep SQLite as an app-local file, and require secure environment variables for AI providers. Custom domains are optional and should warn without blocking when DNS or binding is not ready. They do not create Azure Storage, Static Web Apps, separate API apps, Key Vault, Application Insights, Redis, Cosmos DB, or a managed SQL/PostgreSQL/MySQL database.
+
+Local release preflight should use `deploy-awa.cmd --tenant-name <tenant> --package-only` and `deploy-aca.cmd --tenant-name <tenant> --local-image-only` before any Azure mutation.
 
 ## 7. GitHub Actions Blueprint
 
