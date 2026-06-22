@@ -32,9 +32,9 @@ The AWA script uses Azure CLI `webapp deployment source config-zip` for the ZIP 
 
 The scripts do not create Azure Storage Account, Static Web App, separate API App, Key Vault, Application Insights, Log Analytics Workspace, Redis, Cosmos DB, Azure SQL, PostgreSQL, MySQL, or another managed database resource.
 
-## Tenant Naming
+## Tenant Naming and Lifecycle
 
-Tenant configuration is discovered by traversing `.tenants/*.env`. The real `.env` files are ignored by Git; commit only `.env.example` templates. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
+Tenant configuration is discovered by traversing `.tenants/*.env`. The real `.env` files are ignored by Git; the only committed tenant template is `.tenants/.template.env.example`. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
 
 Required tenant keys include:
 
@@ -50,6 +50,19 @@ ACA registry names are tenant-scoped and deterministic: `acr<tenant_order_number
 ACA image repositories are tenant-scoped and deterministic: `<tenant_name>-<tenant_order_number>:latest`.
 
 `deploy-awa.cmd` checks App Service global name availability before local build/publish. If `<tenant_azure_domain_name>` is unavailable or belongs to an unowned app, the script fails before Azure mutation and the tenant env file must be changed or the name reclaimed in Azure.
+
+New tenant lifecycle:
+
+1. Copy `.tenants/.template.env.example` to `.tenants/<tenant-name>.env`.
+2. Set `tenant_name=<tenant-name>` and keep the file name and value identical.
+3. Replace the placeholder `tenant_id` with a unique 32-character lowercase hex value.
+4. Set `tenant_order_number=1` for the first environment of that tenant identity; increment only for separate tenant-order deployments.
+5. Set `tenant_display_name`, `tenant_web_url`, `tenant_admin_email`, `tenant_feedback_email`, and all `ui_web_*` strings.
+6. Set `tenant_azure_domain_name` to the desired Azure Web App / ACA app DNS label and verify it is globally available before live deploy.
+7. Set `tenant_custom_domain_name` only when an owned DNS name exists; scripts warn and continue if CNAME/binding is not ready.
+8. Add `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` when the tenant logo URL points to the local brand asset path.
+9. Configure `tenant_knowledge_source_1_*`, crawler limits, text-cleaner terms, AI provider defaults, and SQLite path.
+10. Set `tenant_enabled=true`, then validate locally with `run-app.cmd --tenant-name <tenant-name> --no-browser` and deployment preflight commands.
 
 ## Database Strategy
 
@@ -70,6 +83,8 @@ Both Azure deployment scripts fail fast if required cloud env files or required 
 These files are local-only and ignored by Git. The scripts do not invent secrets.
 
 Tenant `.env` files may contain deployment names, public branding, and local SQLite paths. They are still ignored by Git because real tenant configuration can later include private operational values.
+
+Root provider `.env.example` files are intentionally not committed. Keep required provider key names documented here and keep tenant examples centralized in `.tenants/.template.env.example`.
 
 ## Tenant Brand Assets
 

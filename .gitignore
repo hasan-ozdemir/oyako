@@ -1,10 +1,8 @@
 # Secrets and local environment files
 *.env
 *.env.*
-!*.env.example
 .tenants/*.env
-!.tenants/*.env.example
-!.tenants/README.md
+!.tenants/.template.env.example
 oyako.env
 azure.env
 ollama.env
