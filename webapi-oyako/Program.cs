@@ -71,6 +71,43 @@ var isDockerRuntime = string.Equals(Environment.GetEnvironmentVariable("OYAKO_DO
     || string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase);
 var isAzureWebAppRuntime = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
 var isDeployedRuntime = isDockerRuntime || isAzureWebAppRuntime;
+if (isAzureWebAppRuntime)
+{
+    var browserPath = Environment.GetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH");
+    if (string.IsNullOrWhiteSpace(browserPath))
+    {
+        browserPath = "/home/oyako-playwright/ms-playwright";
+        Environment.SetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH", browserPath);
+    }
+
+    Environment.SetEnvironmentVariable("PLAYWRIGHT_DRIVER_SEARCH_PATH", AppContext.BaseDirectory);
+    Directory.CreateDirectory(browserPath);
+    var hasChromium = Directory.EnumerateFiles(browserPath, "chrome", SearchOption.AllDirectories)
+        .Any(path => path.Replace('\\', '/').Contains("/chromium-", StringComparison.OrdinalIgnoreCase)
+            && path.Replace('\\', '/').EndsWith("/chrome-linux64/chrome", StringComparison.OrdinalIgnoreCase));
+    if (!hasChromium)
+    {
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+        var installExitCode = 0;
+        try
+        {
+            Console.SetOut(TextWriter.Null);
+            Console.SetError(TextWriter.Null);
+            installExitCode = Microsoft.Playwright.Program.Main(["install", "chromium"]);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetError(originalError);
+        }
+
+        if (installExitCode != 0)
+        {
+            throw new InvalidOperationException($"Playwright Chromium install failed with exit code {installExitCode}.");
+        }
+    }
+}
 // Resolves the repository-local HTTPS certificate so local development does not depend on the OS certificate store.
 var portableHttpsCertificatePath = isDeployedRuntime
     ? null
