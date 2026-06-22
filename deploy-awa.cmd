@@ -807,6 +807,58 @@ function Remove-OwnedPlan() {
     }
 }
 
+function New-PortableZip([string]$SourceDir, [string]$ZipPath) {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    if (Test-Path -LiteralPath $ZipPath) {
+        Remove-Item -LiteralPath $ZipPath -Force
+    }
+
+    $zipParent = Split-Path -Parent $ZipPath
+    if (-not (Test-Path -LiteralPath $zipParent -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $zipParent | Out-Null
+    }
+
+    $root = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd("\", "/")
+    $archive = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $files = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force | Sort-Object FullName)
+        if ($files.Count -eq 0) {
+            Fail "Cannot create App Service ZIP package because publish directory is empty: $SourceDir"
+        }
+
+        foreach ($file in $files) {
+            $relativePath = $file.FullName.Substring($root.Length).TrimStart("\", "/")
+            $entryName = $relativePath -replace "\\", "/"
+            if ([string]::IsNullOrWhiteSpace($entryName) -or $entryName.Contains("\")) {
+                Fail "Invalid ZIP entry path '$entryName' for '$($file.FullName)'."
+            }
+
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive,
+                $file.FullName,
+                $entryName,
+                [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    $verificationArchive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        foreach ($entry in $verificationArchive.Entries) {
+            if ($entry.FullName.Contains("\")) {
+                Fail "App Service ZIP contains a Windows-style entry path: $($entry.FullName)"
+            }
+        }
+    }
+    finally {
+        $verificationArchive.Dispose()
+    }
+}
+
 function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
     $apiProject = Join-Path $Root "webapi-oyako\webapi-oyako.csproj"
     $webDir = Join-Path $Root "webapp-oyako"
@@ -839,6 +891,11 @@ function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
     }
     if (-not (Test-Path -LiteralPath (Join-Path $PublishDir ".playwright\node\linux-x64\node"))) {
         Fail "Playwright linux-x64 node driver was not found after publish. Direct App Service deploy cannot validate Chromium."
+    }
+
+    $publishCertificates = Join-Path $PublishDir ".certificates"
+    if (Test-Path -LiteralPath $publishCertificates) {
+        Remove-Item -LiteralPath $publishCertificates -Recurse -Force
     }
 
     $startupScript = @'
@@ -878,10 +935,7 @@ exec dotnet ./webapi-oyako.dll
         [System.Text.ASCIIEncoding]::new())
 
     Step "Creating App Service ZIP package"
-    if (Test-Path -LiteralPath $ZipPath) {
-        Remove-Item -LiteralPath $ZipPath -Force
-    }
-    Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $ZipPath -Force
+    New-PortableZip $PublishDir $ZipPath
 }
 
 try {
