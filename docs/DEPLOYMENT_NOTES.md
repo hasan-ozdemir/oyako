@@ -84,6 +84,7 @@ Root `oyako.env` is committed and must remain secrets-free. It stores tenant-agn
 - `awa_sku`
 - `awa_runtime`
 - `awa_linux_fx_version`
+- `awa_scm_settle_seconds`
 - GitHub Actions setup/runtime readiness settings
 
 Both Azure deployment scripts fail fast if required cloud env files or required keys are missing:

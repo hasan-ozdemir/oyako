@@ -35,6 +35,7 @@ $ManagedBy = "deploy-awa"
 $Sku = "B1"
 $Runtime = "DOTNETCORE:10.0"
 $LinuxFxVersion = "DOTNETCORE|10.0"
+$ScmSettleSeconds = 90
 $SmokeTimeoutSeconds = 360
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
 $GlobalEnv = @{}
@@ -251,6 +252,7 @@ function Apply-GlobalConfig([hashtable]$Config) {
     $script:Sku = EnvValue $Config "awa_sku" $script:Sku
     $script:Runtime = EnvValue $Config "awa_runtime" $script:Runtime
     $script:LinuxFxVersion = EnvValue $Config "awa_linux_fx_version" $script:LinuxFxVersion
+    $script:ScmSettleSeconds = [int](Assert-PositiveInt (EnvValue $Config "awa_scm_settle_seconds" ([string]$script:ScmSettleSeconds)) "awa_scm_settle_seconds")
 
     if ($script:Subscription -notmatch "^[A-Za-z0-9._ -]+$") { Fail "azure_subscription in oyako.env contains unsupported characters." }
     if ($script:Location -notmatch "^[a-z0-9]+$") { Fail "azure_location in oyako.env must be an Azure location name such as italynorth." }
@@ -634,6 +636,42 @@ function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$
     } while ((Get-Date) -lt $deadline)
 
     return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
+}
+
+function Wait-ScmStable([string]$WebAppHostName, [int]$InitialSettleSeconds) {
+    if ($InitialSettleSeconds -gt 0) {
+        Write-Host "Waiting $InitialSettleSeconds seconds for App Service SCM to settle after configuration changes..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds $InitialSettleSeconds
+    }
+
+    $url = "https://$WebAppHostName.scm.azurewebsites.net/api/deployments"
+    $deadline = (Get-Date).AddMinutes(4)
+    $consecutiveOk = 0
+    $last = ""
+    do {
+        try {
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $consecutiveOk++
+                if ($consecutiveOk -ge 3) {
+                    Ok "SCM endpoint is stable for ZIP deployment."
+                    return
+                }
+            }
+            else {
+                $consecutiveOk = 0
+                $last = "HTTP $($response.StatusCode)"
+            }
+        }
+        catch {
+            $consecutiveOk = 0
+            $last = $_.Exception.Message
+        }
+
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
+
+    Fail "SCM endpoint did not become stable before ZIP deployment. Last status: $last"
 }
 
 function Wait-TenantConfigSmoke([string]$Name, [string]$Url, [string]$ExpectedTenantName, [string]$ExpectedDisplayName, [int]$TimeoutSeconds) {
@@ -1040,6 +1078,9 @@ try {
         "ollama_api_key=$($ollamaEnv["ollama_api_key"])"
     ) + $tenantAppSettings
     Az ((@("webapp", "config", "appsettings", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--settings") + $appSettings)) -Sensitive
+
+    Step "Waiting for App Service SCM stability"
+    Wait-ScmStable $WebAppName $ScmSettleSeconds
 
     Step "Deploying ZIP package"
     Az @("webapp", "deployment", "source", "config-zip", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src", $ZipPath, "--timeout", "600")
