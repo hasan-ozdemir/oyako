@@ -552,10 +552,63 @@ function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$
     return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
 }
 
+function Wait-TenantConfigSmoke([string]$Name, [string]$Url, [string]$ExpectedTenantName, [string]$ExpectedDisplayName, [int]$TimeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $last = ""
+    do {
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
+            $snippet = (($response.Content -replace "\s+", " ").Trim())
+            if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $config = $response.Content | ConvertFrom-Json
+                if ([string]$config.tenantName -eq $ExpectedTenantName -and [string]$config.tenantDisplayName -eq $ExpectedDisplayName) {
+                    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = $response.StatusCode; Snippet = $snippet; Ok = $true }
+                }
+                $last = "HTTP $($response.StatusCode): tenant config mismatch. $snippet"
+            }
+            else {
+                $last = "HTTP $($response.StatusCode): $snippet"
+            }
+        }
+        catch {
+            $last = $_.Exception.Message
+            if ($_.Exception.Response) {
+                try { $last = "HTTP $([int]$_.Exception.Response.StatusCode): $last" } catch { }
+            }
+        }
+
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
+
+    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
+}
+
 function Get-Acr([string]$Name) {
     $result = TryAz @("acr", "show", "--name", $Name, "-o", "json")
     if (-not $result.Ok) { return $null }
     return FromJson $result.Text
+}
+
+function Remove-LegacyOwnedAcrs([string]$TargetName, [hashtable]$TenantEnv, [string]$TenantName) {
+    $result = TryAz @("resource", "list", "--resource-group", $ResourceGroup, "--resource-type", "Microsoft.ContainerRegistry/registries", "-o", "json")
+    if (-not $result.Ok) {
+        Fail "Could not list Container Registries in resource group '$ResourceGroup'. $($result.Text)"
+    }
+
+    $rawRegistries = FromJson $result.Text
+    $registries = if ($null -eq $rawRegistries) { @() } elseif ($rawRegistries -is [Array]) { $rawRegistries } else { @($rawRegistries) }
+    foreach ($registry in $registries) {
+        $name = [string]$registry.name
+        if ($name -eq $TargetName) { continue }
+        $isSameTenant = (Get-TagValue $registry "tenant-name") -eq $TenantName `
+            -and (Get-TagValue $registry "tenant-id") -eq [string]$TenantEnv["tenant_id"] `
+            -and (Get-TagValue $registry "tenant-order-number") -eq [string]$TenantEnv["tenant_order_number"]
+        if ((Is-Owned $registry) -and $isSameTenant) {
+            Step "Removing legacy script-owned ACR $name"
+            Az @("acr", "delete", "--name", $name, "--resource-group", $ResourceGroup, "--yes")
+        }
+    }
 }
 
 function Get-ContainerAppByName([string]$Name) {
@@ -574,6 +627,53 @@ function Get-ContainerApp() {
     return Get-ContainerAppByName $AppName
 }
 
+function Deactivate-InactiveContainerAppRevisions() {
+    $app = Get-ContainerApp
+    if (-not $app) { return }
+
+    $latestRevision = [string]$app.properties.latestRevisionName
+    $result = TryAz @("containerapp", "revision", "list", "--name", $AppName, "--resource-group", $ResourceGroup, "-o", "json")
+    if (-not $result.Ok) {
+        Fail "Could not list Container App revisions for $AppName. $($result.Text)"
+    }
+
+    $rawRevisions = FromJson $result.Text
+    $revisions = if ($null -eq $rawRevisions) { @() } elseif ($rawRevisions -is [Array]) { $rawRevisions } else { @($rawRevisions) }
+    foreach ($revision in $revisions) {
+        $name = [string]$revision.name
+        $activeValue = $revision.properties.active
+        if ($activeValue -is [Array]) { $activeValue = @($activeValue | Select-Object -First 1)[0] }
+        $active = [bool]$activeValue
+        $trafficWeightValue = $revision.properties.trafficWeight
+        if ($trafficWeightValue -is [Array]) { $trafficWeightValue = @($trafficWeightValue | Select-Object -First 1)[0] }
+        $trafficWeight = 0
+        if ($null -ne $trafficWeightValue) { [void][int]::TryParse([string]$trafficWeightValue, [ref]$trafficWeight) }
+        if ($active -and $trafficWeight -eq 0 -and $name -ne $latestRevision) {
+            Step "Deactivating inactive Container App revision $name"
+            Az @("containerapp", "revision", "deactivate", "--name", $AppName, "--resource-group", $ResourceGroup, "--revision", $name)
+        }
+    }
+}
+
+function Wait-ContainerAppProvisioned([int]$TimeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $app = Get-ContainerApp
+        if ($app) {
+            $state = [string]$app.properties.provisioningState
+            if ($state -eq "Succeeded") {
+                return
+            }
+            if ($state -eq "Failed") {
+                Fail "Container App $AppName provisioning failed."
+            }
+        }
+        Start-Sleep -Seconds 10
+    } while ((Get-Date) -lt $deadline)
+
+    Fail "Container App $AppName did not reach provisioningState=Succeeded within $TimeoutSeconds seconds."
+}
+
 function Get-ContainerEnvironment() {
     return Get-ContainerEnvironmentByName $EnvironmentName
 }
@@ -583,9 +683,29 @@ function Remove-OwnedContainerAppByName([string]$Name, [string]$Description) {
     Assert-OwnedOrMissing $app $Name "Container App"
     if ($app) {
         Step "Removing $Description Container App $Name"
-        Az @("containerapp", "delete", "--name", $Name, "--resource-group", $ResourceGroup, "--yes", "--no-wait")
+        Az @("containerapp", "delete", "--name", $Name, "--resource-group", $ResourceGroup, "--yes")
         Wait-ResourceGone "Container App $Name" { [bool](Get-ContainerAppByName $Name) }
     }
+}
+
+function Create-ContainerAppBootstrap([string[]]$CreateArguments) {
+    $deadline = (Get-Date).AddMinutes(10)
+    do {
+        $result = TryAz $CreateArguments
+        if ($result.Ok) {
+            return
+        }
+
+        if ($result.Text -match "pending delete|Conflict|already exists") {
+            Write-Host "Container App name is still settling after delete; retrying create in 20 seconds."
+            Start-Sleep -Seconds 20
+            continue
+        }
+
+        Fail "Container App bootstrap create failed. $($result.Text)"
+    } while ((Get-Date) -lt $deadline)
+
+    Fail "Container App bootstrap create did not succeed within 10 minutes after delete."
 }
 
 function Remove-OwnedEnvironmentByName([string]$Name, [string]$Description) {
@@ -661,15 +781,28 @@ function Ensure-ContainerAppBootstrap() {
         $environmentMatches = ([string]$app.properties.environmentId).EndsWith("/$EnvironmentName", [StringComparison]::OrdinalIgnoreCase)
         $locationMatches = (Normalize-Location ([string]$app.location)) -eq $Location
         if ($environmentMatches -and $locationMatches) {
+            $provisioningState = [string]$app.properties.provisioningState
+            if ($provisioningState -eq "Failed") {
+                Remove-OwnedContainerAppByName $AppName "failed"
+                $app = $null
+            }
+            elseif ($provisioningState -ne "Succeeded") {
+                Wait-ContainerAppProvisioned 600
+            }
+        }
+
+        if ($app -and $environmentMatches -and $locationMatches) {
             Ok "Using existing Container App $AppName."
             return
         }
 
-        Remove-OwnedContainerApp
+        if ($app) {
+            Remove-OwnedContainerApp
+        }
     }
 
     Step "Creating Container App bootstrap identity"
-    Az ((@(
+    Create-ContainerAppBootstrap ((@(
         "containerapp", "create",
         "--name", $AppName,
         "--resource-group", $ResourceGroup,
@@ -689,6 +822,7 @@ function Ensure-ContainerAppBootstrap() {
         $app = Get-ContainerApp
         if ($app) { [string]$app.id } else { "" }
     } 240
+    Wait-ContainerAppProvisioned 600
 }
 
 function Ensure-AcrPull([string]$AcrId) {
@@ -789,6 +923,7 @@ try {
     if ($acrName -notmatch "^[a-z0-9]{5,50}$") {
         Fail "ACR name '$acrName' is invalid. Expected acr<tenant_order_number><tenant_id>, 5-50 lowercase alphanumeric characters."
     }
+    Remove-LegacyOwnedAcrs $acrName $tenantEnv $tenantName
     $acr = Get-Acr $acrName
     Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
     if ($acr -and [string]$acr.resourceGroup -ne $ResourceGroup) {
@@ -937,7 +1072,9 @@ try {
         "--max-replicas", "1",
         "--replace-env-vars"
     ) + $envVars))
+    Wait-ContainerAppProvisioned 600
     Az @("containerapp", "ingress", "enable", "--name", $AppName, "--resource-group", $ResourceGroup, "--type", "external", "--target-port", $TargetPort, "--transport", "auto")
+    Wait-ContainerAppProvisioned 300
 
     $fqdn = Wait-Text "Container App FQDN" {
         AzText @("containerapp", "show", "--name", $AppName, "--resource-group", $ResourceGroup, "--query", "properties.configuration.ingress.fqdn", "-o", "tsv") -Quiet
@@ -950,11 +1087,14 @@ try {
     Try-ConfigureCustomDomain ([string]$tenantEnv["tenant_custom_domain_name"]) $fqdn
 
     Step "Running smoke tests"
-    $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds ([string]$tenantEnv["ui_web_assistant_name"])
+    Deactivate-InactiveContainerAppRevisions
+
+    $rootSmoke = Wait-Smoke "ACA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "manifest.webmanifest"
+    $tenantConfigSmoke = Wait-TenantConfigSmoke "ACA /api/tenant-config" "$apiBaseUrl/tenant-config" $tenantName ([string]$tenantEnv["tenant_display_name"]) $SmokeTimeoutSeconds
     $healthSmoke = Wait-Smoke "ACA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
     $apiHealthSmoke = Wait-Smoke "ACA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds '"status":"ready"'
     $browserSmoke = Wait-Smoke "ACA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
-    $smokeResults = @($rootSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
+    $smokeResults = @($rootSmoke, $tenantConfigSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "ACA smoke tests failed.`n$details"

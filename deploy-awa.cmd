@@ -565,6 +565,38 @@ function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$
     return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
 }
 
+function Wait-TenantConfigSmoke([string]$Name, [string]$Url, [string]$ExpectedTenantName, [string]$ExpectedDisplayName, [int]$TimeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $last = ""
+    do {
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
+            $snippet = (($response.Content -replace "\s+", " ").Trim())
+            if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $config = $response.Content | ConvertFrom-Json
+                if ([string]$config.tenantName -eq $ExpectedTenantName -and [string]$config.tenantDisplayName -eq $ExpectedDisplayName) {
+                    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = $response.StatusCode; Snippet = $snippet; Ok = $true }
+                }
+                $last = "HTTP $($response.StatusCode): tenant config mismatch. $snippet"
+            }
+            else {
+                $last = "HTTP $($response.StatusCode): $snippet"
+            }
+        }
+        catch {
+            $last = $_.Exception.Message
+            if ($_.Exception.Response) {
+                try { $last = "HTTP $([int]$_.Exception.Response.StatusCode): $last" } catch { }
+            }
+        }
+
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
+
+    return [pscustomobject]@{ Name = $Name; Url = $Url; StatusCode = 0; Snippet = $last; Ok = $false }
+}
+
 function Set-RemoteAiProvider([string]$BaseUrl, [string]$Provider) {
     $settingsUrl = "$BaseUrl/api/ai-settings"
     try {
@@ -952,11 +984,12 @@ try {
     Set-RemoteAiProvider $baseUrl $aiProvider
 
     Step "Running Web App smoke tests"
-    $rootSmoke = Wait-Smoke "AWA frontend root" "$baseUrl/" $SmokeTimeoutSeconds ([string]$tenantEnv["ui_web_assistant_name"])
+    $rootSmoke = Wait-Smoke "AWA frontend root" "$baseUrl/" $SmokeTimeoutSeconds "manifest.webmanifest"
+    $tenantConfigSmoke = Wait-TenantConfigSmoke "AWA /api/tenant-config" "$apiBaseUrl/tenant-config" $tenantName ([string]$tenantEnv["tenant_display_name"]) $SmokeTimeoutSeconds
     $healthSmoke = Wait-Smoke "AWA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
     $apiHealthSmoke = Wait-Smoke "AWA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds "`"activeAiProvider`":`"$aiProvider`""
     $browserSmoke = Wait-Smoke "AWA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
-    $smokeResults = @($rootSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
+    $smokeResults = @($rootSmoke, $tenantConfigSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "AWA smoke tests failed.`n$details"
