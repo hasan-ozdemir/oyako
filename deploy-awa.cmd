@@ -46,7 +46,7 @@ $script:PackageOnly = $false
 
 function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
-function Warn([string]$Message) { Write-Host "WARNING: $Message" -ForegroundColor Yellow }
+function Warn([string]$Message) { Write-Host "INFO: $Message" -ForegroundColor Cyan }
 function Fail([string]$Message) { throw $Message }
 
 function Merge-ArgumentList {
@@ -873,6 +873,7 @@ function New-PortableZip([string]$SourceDir, [string]$ZipPath) {
 
 function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
     $apiProject = Join-Path $Root "webapi-oyako\webapi-oyako.csproj"
+    $startupScriptPath = Join-Path $Root "webapi-oyako\startup.sh"
     $webDir = Join-Path $Root "webapp-oyako"
     $webDist = Join-Path $webDir "dist"
     $wwwroot = Join-Path $PublishDir "wwwroot"
@@ -910,41 +911,15 @@ function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
         Remove-Item -LiteralPath $publishCertificates -Recurse -Force
     }
 
-    $startupScript = @'
-#!/usr/bin/env bash
-set -euo pipefail
-
-export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Production}"
-export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://0.0.0.0:${PORT:-8080}}"
-export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/home/oyako-playwright/ms-playwright}"
-mkdir -p /home/oyako-data "${PLAYWRIGHT_BROWSERS_PATH}"
-PLAYWRIGHT_DEPS_MARKER="${PLAYWRIGHT_BROWSERS_PATH}/.oyako-deps-installed"
-
-if [ ! -f ./webapi-oyako.dll ]; then
-  echo "[startup] ERROR: webapi-oyako.dll is missing from the deployed package."
-  exit 90
-fi
-
-if [ ! -f ./Microsoft.Playwright.dll ]; then
-  echo "[startup] ERROR: Microsoft.Playwright.dll is missing from the deployed package."
-  exit 91
-fi
-
-if [ ! -f ./.playwright/node/linux-x64/node ]; then
-  echo "[startup] ERROR: Playwright linux-x64 node driver is missing from the deployed package."
-  exit 92
-fi
-
-chmod +x ./.playwright/node/linux-x64/node
-if [ ! -f "${PLAYWRIGHT_DEPS_MARKER}" ] && [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] && [ ! -e /lib/x86_64-linux-gnu/libnspr4.so ]; then
-  dotnet ./webapi-oyako.dll --install-playwright-deps
-  touch "${PLAYWRIGHT_DEPS_MARKER}"
-fi
-if ! compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux/chrome" > /dev/null; then
-  dotnet ./webapi-oyako.dll --install-playwright
-fi
-exec dotnet ./webapi-oyako.dll
-'@
+    if (-not (Test-Path -LiteralPath $startupScriptPath)) {
+        Fail "Linux startup script was not found: $startupScriptPath"
+    }
+    $startupScript = [IO.File]::ReadAllText($startupScriptPath, [System.Text.UTF8Encoding]::new($false))
+    foreach ($requiredText in @("#!/usr/bin/env bash", "set -euo pipefail", "PLAYWRIGHT_DEPS_MARKER", "exec dotnet ./webapi-oyako.dll")) {
+        if ($startupScript -notmatch [regex]::Escape($requiredText)) {
+            Fail "Linux startup script is missing required text: $requiredText"
+        }
+    }
     [IO.File]::WriteAllText(
         (Join-Path $PublishDir "startup.sh"),
         ($startupScript -replace "`r`n", "`n"),

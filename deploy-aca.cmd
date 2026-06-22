@@ -46,7 +46,7 @@ $script:LocalImageOnly = $false
 
 function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
-function Warn([string]$Message) { Write-Host "WARNING: $Message" -ForegroundColor Yellow }
+function Warn([string]$Message) { Write-Host "INFO: $Message" -ForegroundColor Cyan }
 function Fail([string]$Message) { throw $Message }
 
 function Merge-ArgumentList {
