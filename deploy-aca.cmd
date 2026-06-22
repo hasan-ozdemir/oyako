@@ -28,14 +28,9 @@ $Subscription = "az2vs"
 $Location = "italynorth"
 $ResourceGroup = ""
 $DefaultTenantName = "oyakdijital"
-$DefaultTenantSlug = "oyako"
-$DefaultAppName = "oyako"
-$DefaultEnvironmentName = "oyako-aca-env"
-$PreviousAppName = "oyako-aca"
-$PreviousEnvironmentName = "aca-oyako-env"
-$AppName = $DefaultAppName
-$EnvironmentName = $DefaultEnvironmentName
-$ImageRepository = "oyako"
+$AppName = ""
+$EnvironmentName = ""
+$ImageRepository = ""
 $ImageTag = "latest"
 $Scope = "oyako-aca"
 $ManagedBy = "deploy-aca"
@@ -281,7 +276,7 @@ function Resolve-TenantName {
     $tenantName = $DefaultTenantName
     for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
         $arg = [string]$ScriptArgs[$index]
-        if ($arg -eq "--tenant-name" -or $arg -eq "--tanent-name" -or $arg -eq "-t") {
+        if ($arg -eq "--tenant-name" -or $arg -eq "-t") {
             if ($index + 1 -ge $ScriptArgs.Count) { Fail "$arg requires a tenant name." }
             $tenantName = [string]$ScriptArgs[$index + 1]
             $index++
@@ -291,11 +286,7 @@ function Resolve-TenantName {
             $tenantName = $arg.Substring("--tenant-name=".Length)
             continue
         }
-        if ($arg.StartsWith("--tanent-name=", [StringComparison]::OrdinalIgnoreCase)) {
-            $tenantName = $arg.Substring("--tanent-name=".Length)
-            continue
-        }
-        Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|--tanent-name <name>|-t <name>]"
+        Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>]"
     }
 
     if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
@@ -305,9 +296,43 @@ function Resolve-TenantName {
 }
 
 function Load-TenantEnv([string]$TenantName) {
-    $path = Join-Path $Root ".tenants\$TenantName.env"
-    $tenantEnv = Expand-EnvReferences (Read-EnvFile $path)
+    $tenantsRoot = Join-Path $Root ".tenants"
+    if (-not (Test-Path -LiteralPath $tenantsRoot -PathType Container)) {
+        Fail "Tenant directory was not found: $tenantsRoot"
+    }
+
+    $tenantFiles = @(Get-ChildItem -LiteralPath $tenantsRoot -Filter "*.env" -File | Sort-Object Name)
+    if ($tenantFiles.Count -eq 0) {
+        Fail "No tenant env files were discovered under $tenantsRoot."
+    }
+
+    $path = $null
+    $tenantEnv = $null
+    $discoveredTenants = New-Object System.Collections.Generic.List[string]
+    foreach ($file in $tenantFiles) {
+        $candidateEnv = Expand-EnvReferences (Read-EnvFile $file.FullName)
+        Require-EnvKeys $candidateEnv @("tenant_name", "tenant_enabled") $file.FullName
+        $fileTenantName = [IO.Path]::GetFileNameWithoutExtension($file.Name)
+        if ([string]$candidateEnv["tenant_name"] -ne $fileTenantName) {
+            Fail "Tenant file '$($file.FullName)' declares tenant_name='$($candidateEnv["tenant_name"])', expected '$fileTenantName'."
+        }
+        [void]$discoveredTenants.Add([string]$candidateEnv["tenant_name"])
+        if ([string]$candidateEnv["tenant_name"] -eq $TenantName) {
+            $path = $file.FullName
+            $tenantEnv = $candidateEnv
+        }
+    }
+
+    if (-not $path -or -not $tenantEnv) {
+        Fail "Tenant '$TenantName' was not discovered under .tenants. Discovered tenants: $($discoveredTenants -join ', ')"
+    }
+
+    if ((Assert-BoolValue ([string]$tenantEnv["tenant_enabled"]) "tenant_enabled") -ne "true") {
+        Fail "Tenant '$TenantName' is disabled. Set tenant_enabled=true in '$path' to deploy it."
+    }
+
     $requiredKeys = @(
+        "tenant_enabled",
         "tenant_id",
         "tenant_order_number",
         "tenant_name",
@@ -389,6 +414,19 @@ function Build-TenantKnowledgeSourceAppSettings([hashtable]$TenantEnv) {
         $settings += "Tenant__KnowledgeSources__${zeroIndex}__Description=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_description" "$($TenantEnv["tenant_display_name"]) seed web sitesi bilgi kaynağı.")"
         $settings += "Tenant__KnowledgeSources__${zeroIndex}__Enabled=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_enabled" "true")"
         $index++
+    }
+    return $settings
+}
+
+function Build-TenantListAppSettings([hashtable]$TenantEnv, [string]$EnvKey, [string]$ConfigKey) {
+    $settings = @()
+    if (-not $TenantEnv.ContainsKey($EnvKey)) {
+        return $settings
+    }
+
+    $values = @([string]$TenantEnv[$EnvKey] -split "\|" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    for ($index = 0; $index -lt $values.Count; $index++) {
+        $settings += "$ConfigKey`__$index=$($values[$index])"
     }
     return $settings
 }
@@ -568,29 +606,6 @@ function Remove-OwnedEnvironment() {
     Remove-OwnedEnvironmentByName $EnvironmentName "non-compliant"
 }
 
-function Remove-PreviousAcaCutoverResources([string]$LegacyAcrName) {
-    if (-not [string]::IsNullOrWhiteSpace($PreviousAppName) -and $PreviousAppName -ne $AppName) {
-        Remove-OwnedContainerAppByName $PreviousAppName "previous cutover"
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($PreviousEnvironmentName) -and $PreviousEnvironmentName -ne $EnvironmentName) {
-        Remove-OwnedEnvironmentByName $PreviousEnvironmentName "previous cutover"
-    }
-
-    if ($LegacyAcrName -ne $acrName) {
-        $legacyAcr = Get-Acr $LegacyAcrName
-        if ($legacyAcr) {
-            if ([string]$legacyAcr.resourceGroup -ne $ResourceGroup) {
-                Fail "Legacy ACR '$LegacyAcrName' exists outside $ResourceGroup. Refusing to modify it."
-            }
-
-            Step "Removing legacy ACR $LegacyAcrName"
-            Az @("acr", "delete", "--name", $LegacyAcrName, "--resource-group", $ResourceGroup, "--yes")
-            Wait-ResourceGone "Legacy ACR $LegacyAcrName" { [bool](Get-Acr $LegacyAcrName) }
-        }
-    }
-}
-
 function Get-EnvironmentDefaultDomain($Environment) {
     if (-not $Environment -or -not $Environment.properties) { return "" }
     return [string]$Environment.properties.defaultDomain
@@ -711,12 +726,17 @@ try {
     $tenantEnv = $tenantInfo.Values
     Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
     Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
-    $tenantSlug = EnvValue $tenantEnv "tenant_azure_domain_name" $DefaultTenantSlug
+    $tenantSlug = [string]$tenantEnv["tenant_azure_domain_name"]
     $ResourceGroup = "rg-$($tenantEnv["tenant_id"])-$($tenantEnv["tenant_order_number"])"
+    if ($ResourceGroup -eq "rg-oyako") {
+        Fail "Application resources must not target rg-oyako. rg-oyako is reserved for Azure AI resources."
+    }
     $AppName = $tenantSlug
     $EnvironmentName = "$tenantSlug-aca-env"
-    $PreviousAppName = ""
-    $PreviousEnvironmentName = ""
+    $ImageRepository = "$tenantName-$($tenantEnv["tenant_order_number"])"
+    if ($ImageRepository -notmatch "^[a-z0-9]+(?:[._-][a-z0-9]+)*$") {
+        Fail "Docker image repository '$ImageRepository' is invalid. tenant_name and tenant_order_number must produce a lowercase repository name."
+    }
     $Tags = @(
         "app=oyako",
         "managed-by=$ManagedBy",
@@ -731,6 +751,7 @@ try {
     Ok "Required env files and keys are present."
     Ok "Tenant '$tenantName' loaded from $($tenantInfo.Path)."
     Ok "ACA naming: resource group '$ResourceGroup', app '$AppName', environment '$EnvironmentName'."
+    Ok "ACA image naming: repository '$ImageRepository', tag '$ImageTag'."
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
@@ -764,13 +785,16 @@ try {
     }
 
     Step "Ensuring deterministic ACR"
-    $subscriptionCompact = $subscriptionId.Replace("-", "").ToLowerInvariant()
-    $tenantIdCompact = [string]$tenantEnv["tenant_id"]
-    $acrName = "oyakoacr$($tenantIdCompact.Substring(0, 12))"
-    $legacyAcrName = "acaoyako$($subscriptionCompact.Substring(0, 8))weacr"
+    $acrName = "acr$($tenantEnv["tenant_order_number"])$($tenantEnv["tenant_id"])"
+    if ($acrName -notmatch "^[a-z0-9]{5,50}$") {
+        Fail "ACR name '$acrName' is invalid. Expected acr<tenant_order_number><tenant_id>, 5-50 lowercase alphanumeric characters."
+    }
     $acr = Get-Acr $acrName
     Assert-OwnedOrMissing $acr $acrName "Azure Container Registry"
-    if ($acr -and (([string]$acr.resourceGroup -ne $ResourceGroup -or (Normalize-Location ([string]$acr.location)) -ne $Location))) {
+    if ($acr -and [string]$acr.resourceGroup -ne $ResourceGroup) {
+        Fail "ACR '$acrName' already exists in resource group '$($acr.resourceGroup)'. Deterministic tenant ACR names must be owned in '$ResourceGroup'."
+    }
+    if ($acr -and ((Normalize-Location ([string]$acr.location)) -ne $Location)) {
         Step "Removing non-compliant ACR $acrName"
         Az @("acr", "delete", "--name", $acrName, "--resource-group", $acr.resourceGroup, "--yes")
         $acr = $null
@@ -787,18 +811,25 @@ try {
     $acrId = [string]$acr.id
     Ok "Using ACR $acrName ($acrLoginServer)."
 
-    Step "Building and pushing oyako:latest"
+    Step "Building and pushing $ImageRepository`:$ImageTag"
     $env:DOCKER_BUILDKIT = "1"
     $localImage = "$ImageRepository`:$ImageTag"
     $remoteImage = "$acrLoginServer/$ImageRepository`:$ImageTag"
-    $repoProbe = TryAz @("acr", "repository", "show", "--name", $acrName, "--repository", $ImageRepository, "-o", "json")
-    if ($repoProbe.Ok) {
-        Az @("acr", "repository", "delete", "--name", $acrName, "--repository", $ImageRepository, "--yes")
+    & docker image rm -f $localImage 2>$null | Out-Null
+    $existingRepositories = @(AzText @("acr", "repository", "list", "--name", $acrName, "-o", "json") -Quiet | ConvertFrom-Json)
+    foreach ($repository in $existingRepositories) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$repository)) {
+            Az @("acr", "repository", "delete", "--name", $acrName, "--repository", [string]$repository, "--yes")
+        }
     }
     Run "docker" @("build", "--quiet", "--force-rm", "-t", $localImage, ".") | Out-Null
     Run -Exe "docker" -Arguments @("tag", $localImage, $remoteImage) -Quiet | Out-Null
     Az @("acr", "login", "--name", $acrName)
     Run "docker" @("push", "--quiet", $remoteImage) | Out-Null
+    $repositories = @(AzText @("acr", "repository", "list", "--name", $acrName, "-o", "json") -Quiet | ConvertFrom-Json)
+    if ($repositories.Count -ne 1 -or [string]$repositories[0] -ne $ImageRepository) {
+        Fail "ACR '$acrName' must contain only repository '$ImageRepository', found: $($repositories -join ', ')"
+    }
     $imageTags = @(AzText @("acr", "repository", "show-tags", "--name", $acrName, "--repository", $ImageRepository, "-o", "json") -Quiet | ConvertFrom-Json)
     if ($imageTags.Count -ne 1 -or $imageTags[0] -ne $ImageTag) {
         Fail "ACR repository '$ImageRepository' must contain only '$ImageTag', found: $($imageTags -join ', ')"
@@ -832,6 +863,7 @@ try {
     $crawlerMaxDepth = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_depth" "10") "web_document_max_depth"
     $tenantAppSettings = @(
         "OYAKO_TENANT_NAME=$tenantName",
+        "Tenant__Enabled=true",
         "Tenant__Id=$($tenantEnv["tenant_id"])",
         "Tenant__OrderNumber=$($tenantEnv["tenant_order_number"])",
         "Tenant__Name=$($tenantEnv["tenant_name"])",
@@ -860,6 +892,9 @@ try {
         "Tenant__UiWebKnowledgeDocumentsTableTitle=$($tenantEnv["ui_web_knowledge_documents_table_title"])"
     )
     $tenantAppSettings += Build-TenantKnowledgeSourceAppSettings $tenantEnv
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_leading_boilerplate_terms" "Tenant__TextCleanerLeadingBoilerplateTerms"
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_exact_boilerplate_lines" "Tenant__TextCleanerExactBoilerplateLines"
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_footer_line_prefixes" "Tenant__TextCleanerFooterLinePrefixes"
     $envVars = @(
         "ASPNETCORE_ENVIRONMENT=Production",
         "ASPNETCORE_URLS=http://+:8080",
@@ -924,9 +959,6 @@ try {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "ACA smoke tests failed.`n$details"
     }
-
-    Step "Removing previous ACA cutover resources"
-    Remove-PreviousAcaCutoverResources $legacyAcrName
 
     Step "Collecting final ACA resource list"
     $resources = @()

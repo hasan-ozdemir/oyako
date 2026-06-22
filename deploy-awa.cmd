@@ -28,11 +28,8 @@ $Subscription = "az2vs"
 $Location = "italynorth"
 $ResourceGroup = ""
 $DefaultTenantName = "oyakdijital"
-$DefaultTenantSlug = "oyako"
-$DefaultWebAppName = "oyako"
-$PlanName = "oyako-awa-plan"
-$WebAppName = $DefaultWebAppName
-$PreviousWebAppName = ""
+$PlanName = ""
+$WebAppName = ""
 $Scope = "oyako-awa"
 $ManagedBy = "deploy-awa"
 $Sku = "B1"
@@ -41,6 +38,7 @@ $LinuxFxVersion = "DOTNETCORE|10.0"
 $SmokeTimeoutSeconds = 360
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
 $script:TargetTenantName = $DefaultTenantName
+$script:PackageOnly = $false
 
 function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
@@ -250,7 +248,7 @@ function Resolve-TenantName {
     $tenantName = $DefaultTenantName
     for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
         $arg = [string]$ScriptArgs[$index]
-        if ($arg -eq "--tenant-name" -or $arg -eq "--tanent-name" -or $arg -eq "-t") {
+        if ($arg -eq "--tenant-name" -or $arg -eq "-t") {
             if ($index + 1 -ge $ScriptArgs.Count) { Fail "$arg requires a tenant name." }
             $tenantName = [string]$ScriptArgs[$index + 1]
             $index++
@@ -260,11 +258,11 @@ function Resolve-TenantName {
             $tenantName = $arg.Substring("--tenant-name=".Length)
             continue
         }
-        if ($arg.StartsWith("--tanent-name=", [StringComparison]::OrdinalIgnoreCase)) {
-            $tenantName = $arg.Substring("--tanent-name=".Length)
+        if ($arg -eq "--package-only") {
+            $script:PackageOnly = $true
             continue
         }
-        Fail "Unsupported argument '$arg'. Usage: deploy-awa.cmd [--tenant-name <name>|--tanent-name <name>|-t <name>]"
+        Fail "Unsupported argument '$arg'. Usage: deploy-awa.cmd [--tenant-name <name>|-t <name>] [--package-only]"
     }
 
     if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
@@ -274,9 +272,43 @@ function Resolve-TenantName {
 }
 
 function Load-TenantEnv([string]$TenantName) {
-    $path = Join-Path $Root ".tenants\$TenantName.env"
-    $tenantEnv = Expand-EnvReferences (Read-EnvFile $path)
+    $tenantsRoot = Join-Path $Root ".tenants"
+    if (-not (Test-Path -LiteralPath $tenantsRoot -PathType Container)) {
+        Fail "Tenant directory was not found: $tenantsRoot"
+    }
+
+    $tenantFiles = @(Get-ChildItem -LiteralPath $tenantsRoot -Filter "*.env" -File | Sort-Object Name)
+    if ($tenantFiles.Count -eq 0) {
+        Fail "No tenant env files were discovered under $tenantsRoot."
+    }
+
+    $path = $null
+    $tenantEnv = $null
+    $discoveredTenants = New-Object System.Collections.Generic.List[string]
+    foreach ($file in $tenantFiles) {
+        $candidateEnv = Expand-EnvReferences (Read-EnvFile $file.FullName)
+        Require-EnvKeys $candidateEnv @("tenant_name", "tenant_enabled") $file.FullName
+        $fileTenantName = [IO.Path]::GetFileNameWithoutExtension($file.Name)
+        if ([string]$candidateEnv["tenant_name"] -ne $fileTenantName) {
+            Fail "Tenant file '$($file.FullName)' declares tenant_name='$($candidateEnv["tenant_name"])', expected '$fileTenantName'."
+        }
+        [void]$discoveredTenants.Add([string]$candidateEnv["tenant_name"])
+        if ([string]$candidateEnv["tenant_name"] -eq $TenantName) {
+            $path = $file.FullName
+            $tenantEnv = $candidateEnv
+        }
+    }
+
+    if (-not $path -or -not $tenantEnv) {
+        Fail "Tenant '$TenantName' was not discovered under .tenants. Discovered tenants: $($discoveredTenants -join ', ')"
+    }
+
+    if ((Assert-BoolValue ([string]$tenantEnv["tenant_enabled"]) "tenant_enabled") -ne "true") {
+        Fail "Tenant '$TenantName' is disabled. Set tenant_enabled=true in '$path' to deploy it."
+    }
+
     $requiredKeys = @(
+        "tenant_enabled",
         "tenant_id",
         "tenant_order_number",
         "tenant_name",
@@ -358,6 +390,19 @@ function Build-TenantKnowledgeSourceAppSettings([hashtable]$TenantEnv) {
         $settings += "Tenant__KnowledgeSources__${zeroIndex}__Description=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_description" "$($TenantEnv["tenant_display_name"]) seed web sitesi bilgi kaynağı.")"
         $settings += "Tenant__KnowledgeSources__${zeroIndex}__Enabled=$(EnvValue $TenantEnv "tenant_knowledge_source_${index}_enabled" "true")"
         $index++
+    }
+    return $settings
+}
+
+function Build-TenantListAppSettings([hashtable]$TenantEnv, [string]$EnvKey, [string]$ConfigKey) {
+    $settings = @()
+    if (-not $TenantEnv.ContainsKey($EnvKey)) {
+        return $settings
+    }
+
+    $values = @([string]$TenantEnv[$EnvKey] -split "\|" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    for ($index = 0; $index -lt $values.Count; $index++) {
+        $settings += "$ConfigKey`__$index=$($values[$index])"
     }
     return $settings
 }
@@ -697,22 +742,20 @@ exec dotnet ./webapi-oyako.dll
 try {
     Set-Location -LiteralPath $Root
 
-    Step "Checking local prerequisites and strict env files"
-    Resolve-Exe "az" | Out-Null
+    Step "Checking local prerequisites and strict tenant env files"
     Resolve-Exe "dotnet" | Out-Null
     Resolve-Exe "node" | Out-Null
     Resolve-Exe "npm" | Out-Null
 
-    $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
-    $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
     $tenantName = Resolve-TenantName
     $script:TargetTenantName = $tenantName
     $tenantInfo = Load-TenantEnv $tenantName
     $tenantEnv = $tenantInfo.Values
-    Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
-    Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
-    $tenantSlug = EnvValue $tenantEnv "tenant_azure_domain_name" $DefaultTenantSlug
+    $tenantSlug = [string]$tenantEnv["tenant_azure_domain_name"]
     $ResourceGroup = "rg-$($tenantEnv["tenant_id"])-$($tenantEnv["tenant_order_number"])"
+    if ($ResourceGroup -eq "rg-oyako") {
+        Fail "Application resources must not target rg-oyako. rg-oyako is reserved for Azure AI resources."
+    }
     $WebAppName = $tenantSlug
     $PlanName = "$tenantSlug-awa-plan"
     $Tags = @(
@@ -729,6 +772,27 @@ try {
     Ok "Required env files and keys are present."
     Ok "Tenant '$tenantName' loaded from $($tenantInfo.Path)."
     Ok "AWA naming: resource group '$ResourceGroup', web app '$WebAppName', plan '$PlanName'."
+
+    $buildRoot = Join-Path $Root ".oyako-deploy\awa\$tenantName"
+    $publishDir = Join-Path $buildRoot "publish"
+    $zipPath = Join-Path $buildRoot "$tenantName-awa.zip"
+    Remove-PathInsideRoot $buildRoot
+    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+    Build-PublishPackage $publishDir $zipPath
+
+    if ($script:PackageOnly) {
+        Write-Host ""
+        Write-Host "Oyako App Service package preflight completed." -ForegroundColor Green
+        Write-Host "Tenant: $tenantName ($($tenantEnv["tenant_display_name"]))"
+        Write-Host "Package: $zipPath"
+        exit 0
+    }
+
+    Resolve-Exe "az" | Out-Null
+    $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
+    $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
+    Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
+    Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
@@ -765,13 +829,6 @@ try {
     Assert-WebAppNameAvailableOrOwned $WebAppName $site
     $plan = Get-Plan
     Assert-OwnedOrMissing $plan $PlanName "App Service Plan"
-
-    $buildRoot = Join-Path $Root ".oyako-deploy\awa"
-    $publishDir = Join-Path $buildRoot "publish"
-    $zipPath = Join-Path $buildRoot "oyako-awa.zip"
-    Remove-PathInsideRoot $buildRoot
-    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-    Build-PublishPackage $publishDir $zipPath
 
     Step "Ensuring App Service resources"
     if ($site -and (([string]$site.resourceGroup -ne $ResourceGroup) -or ((Normalize-Location ([string]$site.location)) -ne $Location))) {
@@ -814,6 +871,7 @@ try {
     $crawlerMaxDepth = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_depth" "10") "web_document_max_depth"
     $tenantAppSettings = @(
         "OYAKO_TENANT_NAME=$tenantName",
+        "Tenant__Enabled=true",
         "Tenant__Id=$($tenantEnv["tenant_id"])",
         "Tenant__OrderNumber=$($tenantEnv["tenant_order_number"])",
         "Tenant__Name=$($tenantEnv["tenant_name"])",
@@ -842,6 +900,9 @@ try {
         "Tenant__UiWebKnowledgeDocumentsTableTitle=$($tenantEnv["ui_web_knowledge_documents_table_title"])"
     )
     $tenantAppSettings += Build-TenantKnowledgeSourceAppSettings $tenantEnv
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_leading_boilerplate_terms" "Tenant__TextCleanerLeadingBoilerplateTerms"
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_exact_boilerplate_lines" "Tenant__TextCleanerExactBoilerplateLines"
+    $tenantAppSettings += Build-TenantListAppSettings $tenantEnv "tenant_text_cleaner_footer_line_prefixes" "Tenant__TextCleanerFooterLinePrefixes"
     $appSettings = @(
         "ASPNETCORE_ENVIRONMENT=Production",
         "SCM_DO_BUILD_DURING_DEPLOYMENT=false",
@@ -899,11 +960,6 @@ try {
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine
         Fail "AWA smoke tests failed.`n$details"
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($PreviousWebAppName) -and $PreviousWebAppName -ne $WebAppName) {
-        Step "Removing previous AWA cutover resources"
-        Remove-OwnedWebApp $PreviousWebAppName "previous cutover"
     }
 
     Step "Collecting final App Service resource list"
