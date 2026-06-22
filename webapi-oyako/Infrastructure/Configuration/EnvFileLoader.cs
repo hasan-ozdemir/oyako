@@ -55,6 +55,7 @@ public static class EnvFileLoader
     };
 
     private static readonly Regex EnvReferencePattern = new("%([A-Za-z0-9_]+)%", RegexOptions.Compiled);
+    private static readonly Regex TenantIdPattern = new("^[a-f0-9]{32}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex TenantKnowledgeSourcePattern = new(
         @"^tenant_knowledge_source_(?<index>[1-9][0-9]*)_(?<field>type|url|refresh_period|name|description|enabled)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -68,13 +69,26 @@ public static class EnvFileLoader
         }
     }
 
-    public static string ResolveTenantName()
+    public static string ResolveTenantName(string? contentRootPath = null)
     {
         var tenantName = Environment.GetEnvironmentVariable("OYAKO_TENANT_NAME");
         if (string.IsNullOrWhiteSpace(tenantName))
         {
             tenantName = Environment.GetEnvironmentVariable("tenant_name");
         }
+
+        if (!string.IsNullOrWhiteSpace(tenantName))
+        {
+            return tenantName.Trim();
+        }
+
+        var defaultTenantId = Environment.GetEnvironmentVariable("default_tenant_id");
+        if (!string.IsNullOrWhiteSpace(defaultTenantId))
+        {
+            return ResolveTenantNameByDefaultId(defaultTenantId.Trim(), contentRootPath);
+        }
+
+        tenantName = Environment.GetEnvironmentVariable("default_tenant_name");
 
         return string.IsNullOrWhiteSpace(tenantName)
             ? TenantOptions.DefaultTenantName
@@ -83,7 +97,7 @@ public static class EnvFileLoader
 
     public static void LoadTenant(string contentRootPath)
     {
-        var tenantName = ResolveTenantName();
+        var tenantName = ResolveTenantName(contentRootPath);
         if (FindTenantFile(tenantName, contentRootPath) is null && HasTenantEnvironment(tenantName))
         {
             LoadAliasesFromEnvironment();
@@ -362,6 +376,56 @@ public static class EnvFileLoader
     {
         return string.Equals(Environment.GetEnvironmentVariable("tenant_name"), tenantName, StringComparison.OrdinalIgnoreCase)
             || string.Equals(Environment.GetEnvironmentVariable("Tenant__Name"), tenantName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveTenantNameByDefaultId(string defaultTenantId, string? contentRootPath)
+    {
+        if (!TenantIdPattern.IsMatch(defaultTenantId))
+        {
+            throw new InvalidOperationException("default_tenant_id must be 32 lowercase hex characters.");
+        }
+
+        if (string.IsNullOrWhiteSpace(contentRootPath))
+        {
+            throw new FileNotFoundException("default_tenant_id is configured, but no content root was provided for tenant discovery.");
+        }
+
+        var files = DiscoverTenantFiles(contentRootPath);
+        if (files.Count == 0)
+        {
+            throw new FileNotFoundException("default_tenant_id is configured, but no tenant env files were found under .tenants.");
+        }
+
+        var discoveredTenantNames = new List<string>();
+        foreach (var file in files)
+        {
+            var values = ParseEnvIdentity(file);
+            if (!values.TryGetValue("tenant_name", out var declaredName) || string.IsNullOrWhiteSpace(declaredName))
+            {
+                throw new InvalidOperationException($"Tenant env file must declare tenant_name: {file}");
+            }
+
+            var fileTenantName = Path.GetFileNameWithoutExtension(file);
+            if (!string.Equals(fileTenantName, declaredName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Tenant env file name '{fileTenantName}' must match tenant_name='{declaredName}'. File: {file}");
+            }
+
+            discoveredTenantNames.Add(declaredName);
+            if (!values.TryGetValue("tenant_id", out var tenantId) || !string.Equals(tenantId, defaultTenantId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!IsEnabled(values))
+            {
+                throw new InvalidOperationException($"Tenant '{declaredName}' matches default_tenant_id but is disabled. Set tenant_enabled=true in {file} to run or deploy it.");
+            }
+
+            return declaredName.Trim();
+        }
+
+        throw new FileNotFoundException($"default_tenant_id '{defaultTenantId}' did not match an enabled tenant under .tenants. Discovered tenants: {string.Join(", ", discoveredTenantNames.OrderBy(static value => value))}");
     }
 
     private static void LoadAliasesFromEnvironment()

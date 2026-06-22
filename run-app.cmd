@@ -5,7 +5,7 @@ chcp 65001 >nul
 set "ROOT=%~dp0"
 set "API_DIR=%ROOT%webapi-oyako"
 set "WEB_DIR=%ROOT%webapp-oyako"
-set "TENANT_NAME=oyakdijital"
+set "TENANT_NAME="
 set "OPEN_BROWSER=1"
 
 :parse_args
@@ -41,7 +41,7 @@ goto usage_error
 
 :usage
 echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| -t ^<tenant^>] [--no-browser]
-echo Default tenant: oyakdijital
+echo Default tenant: resolved from oyako.env default_tenant_id/default_tenant_name, then oyakdijital
 exit /b 0
 
 :usage_error
@@ -49,6 +49,9 @@ echo Usage: run-app.cmd [--tenant-name ^<tenant^> ^| -t ^<tenant^>] [--no-browse
 exit /b 1
 
 :args_done
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\resolve-default-tenant.ps1" -Root "%ROOT%." -ExplicitTenantName "%TENANT_NAME%"`) do set "TENANT_NAME=%%A"
+if errorlevel 1 exit /b 1
+
 set "OYAKO_ROOT=%ROOT%"
 set "OYAKO_TENANT_NAME=%TENANT_NAME%"
 

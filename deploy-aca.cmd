@@ -40,6 +40,7 @@ $Cpu = "0.25"
 $Memory = "0.5Gi"
 $SmokeTimeoutSeconds = 240
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
+$GlobalEnv = @{}
 $script:TargetTenantName = $DefaultTenantName
 $script:LocalImageOnly = $false
 
@@ -273,8 +274,64 @@ function Expand-EnvReferences([hashtable]$Map) {
     return $expanded
 }
 
+function Apply-GlobalConfig([hashtable]$Config) {
+    $script:Subscription = EnvValue $Config "azure_subscription" $script:Subscription
+    $script:Location = EnvValue $Config "azure_location" $script:Location
+
+    if ($script:Subscription -notmatch "^[A-Za-z0-9._ -]+$") { Fail "azure_subscription in oyako.env contains unsupported characters." }
+    if ($script:Location -notmatch "^[a-z0-9]+$") { Fail "azure_location in oyako.env must be an Azure location name such as italynorth." }
+}
+
+function Resolve-DefaultTenantName {
+    if (-not [string]::IsNullOrWhiteSpace($env:OYAKO_TENANT_NAME)) { return $env:OYAKO_TENANT_NAME.Trim() }
+    if (-not [string]::IsNullOrWhiteSpace($env:tenant_name)) { return $env:tenant_name.Trim() }
+
+    $defaultTenantId = EnvValue $GlobalEnv "default_tenant_id" ""
+    if (-not [string]::IsNullOrWhiteSpace($defaultTenantId)) {
+        return Resolve-TenantNameById $defaultTenantId
+    }
+
+    return EnvValue $GlobalEnv "default_tenant_name" $DefaultTenantName
+}
+
+function Resolve-TenantNameById([string]$TenantId) {
+    if ($TenantId -notmatch "^[a-f0-9]{32}$") {
+        Fail "default_tenant_id in oyako.env must be 32 lowercase hex characters."
+    }
+
+    $tenantsRoot = Join-Path $Root ".tenants"
+    if (-not (Test-Path -LiteralPath $tenantsRoot -PathType Container)) {
+        Fail "default_tenant_id is configured, but tenant directory was not found: $tenantsRoot"
+    }
+
+    $tenantFiles = @(Get-ChildItem -LiteralPath $tenantsRoot -Filter "*.env" -File | Sort-Object Name)
+    if ($tenantFiles.Count -eq 0) {
+        Fail "default_tenant_id is configured, but no tenant env files were discovered under $tenantsRoot."
+    }
+
+    $discoveredTenants = New-Object System.Collections.Generic.List[string]
+    foreach ($file in $tenantFiles) {
+        $candidateEnv = Expand-EnvReferences (Read-EnvFile $file.FullName)
+        Require-EnvKeys $candidateEnv @("tenant_name", "tenant_enabled") $file.FullName
+        $fileTenantName = [IO.Path]::GetFileNameWithoutExtension($file.Name)
+        if ([string]$candidateEnv["tenant_name"] -ne $fileTenantName) {
+            Fail "Tenant file '$($file.FullName)' declares tenant_name='$($candidateEnv["tenant_name"])', expected '$fileTenantName'."
+        }
+
+        [void]$discoveredTenants.Add([string]$candidateEnv["tenant_name"])
+        if ((EnvValue $candidateEnv "tenant_id" "") -ne $TenantId) { continue }
+        if ((Assert-BoolValue ([string]$candidateEnv["tenant_enabled"]) "tenant_enabled") -ne "true") {
+            Fail "Tenant '$($candidateEnv["tenant_name"])' matches default_tenant_id but is disabled. Set tenant_enabled=true in '$($file.FullName)' to deploy it."
+        }
+
+        return [string]$candidateEnv["tenant_name"]
+    }
+
+    Fail "default_tenant_id '$TenantId' did not match an enabled tenant. Discovered tenants: $($discoveredTenants -join ', ')"
+}
+
 function Resolve-TenantName {
-    $tenantName = $DefaultTenantName
+    $tenantName = ""
     for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
         $arg = [string]$ScriptArgs[$index]
         if ($arg -eq "--local-image-only") {
@@ -296,6 +353,10 @@ function Resolve-TenantName {
             continue
         }
         Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>] [--local-image-only]"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($tenantName)) {
+        $tenantName = Resolve-DefaultTenantName
     }
 
     if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
@@ -857,6 +918,9 @@ try {
     Set-Location -LiteralPath $Root
 
     Step "Checking local prerequisites and strict env files"
+    $GlobalEnv = Expand-EnvReferences (Read-OptionalEnvFile (Join-Path $Root "oyako.env"))
+    Apply-GlobalConfig $GlobalEnv
+
     $tenantName = Resolve-TenantName
     $script:TargetTenantName = $tenantName
     Resolve-Exe "docker" | Out-Null
