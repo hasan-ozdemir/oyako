@@ -122,6 +122,8 @@ The workflow materializes these ignored files on the runner, runs `deploy-awa.cm
 
 Crawler timing is configured once in tracked `oyako.env` and copied into both AWA App Settings and ACA environment variables during deployment. The current release defaults use a 20 second HTTP/render budget, 0-100 ms request delay, and 1 second startup refresh jitter so slow first responses can still produce usable documents without lengthening successful release cycles unnecessarily.
 
+On application startup, tenant seed sources from configuration are marked due again. This keeps pre-alpha cutovers deterministic when a previous local SQLite state exists but has no usable documents yet.
+
 ## Tenant Brand Assets
 
 Tenant brand logo SVGs are served locally from `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` so deployed pages do not depend on remote logo hotlinks. Verify trademark and brand usage approvals before public production rollout.

@@ -465,7 +465,7 @@ public sealed class SqliteDbInitializer
                     seed_key = $seedKey,
                     refresh_period_minutes = $refreshPeriodMinutes,
                     auto_refresh_enabled = $autoRefreshEnabled,
-                    next_refresh_at_utc = COALESCE(next_refresh_at_utc, $nextRefreshAtUtc),
+                    next_refresh_at_utc = $nextRefreshAtUtc,
                     updated_at_utc = $now
                 WHERE seed_key = $seedKey OR address = $address;
 
