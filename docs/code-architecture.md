@@ -2,7 +2,7 @@
 
 ## 1. Product Purpose
 
-Oyako is a full-stack, one-page question-answer platform for Oyak Dijital content. The frontend gives users a modern Turkish UI for asking questions. The backend collects public Oyak Dijital web content, stores it in portable SQLite, builds a system instruction cache, generates ready questions, and sends one-shot prompts to the active AI provider.
+Oyako is a full-stack, one-page question-answer platform for tenant-managed knowledge sources. The frontend gives users a modern Turkish UI for asking questions. The backend collects enabled tenant web content, stores it in portable SQLite, builds a system instruction cache, generates ready questions, and sends one-shot prompts to the active AI provider.
 
 The product rule is simple: code identifiers and developer comments stay in English, while user-facing UI, runtime messages, assistant instructions, and help content stay Turkish.
 
@@ -150,7 +150,7 @@ The frontend is a React + TypeScript + Vite SPA.
 
 `index.css` defines global theme tokens, typography, focus behavior, and base layout. `App.css` defines component-level styling, responsive layout, dialogs, progress views, cards, bubbles, menus, and status bar behavior.
 
-The UI follows a Turkish product language, OYAK-inspired red/neutral color system, strong focus-visible support, and mobile-first responsive corrections.
+The UI follows a Turkish product language, tenant-neutral red/neutral color system, strong focus-visible support, and mobile-first responsive corrections.
 
 ### 5.5 Help Page
 
@@ -191,7 +191,7 @@ Backend tests cover URL normalization, text extraction, crawler behavior, cache 
 
 ### 9.2 Frontend Tests
 
-Playwright tests use a mock API to validate UI behavior without depending on Azure, Ollama, or the live Oyak Dijital site. Axe tests check critical accessibility issues on the main screen and dialogs.
+Playwright tests use a mock API to validate UI behavior without depending on Azure, Ollama, or the live Tenant Demo site. Axe tests check critical accessibility issues on the main screen and dialogs.
 
 ### 9.3 Full-Stack Tests
 
@@ -233,5 +233,5 @@ This release is the public pre-alpha baseline. It treats the current schema and 
 
 The Azure deployment paths are intentionally minimal:
 
-- `deploy-aca.cmd` builds and pushes `oyako:latest`, recreates only ACA-scope tagged resources in `italynorth`, deploys one always-on Container App, verifies public health/browser behavior, and confirms the ACR repository contains only the `latest` tag.
+- `deploy-aca.cmd` builds and pushes `<tenant_name>-<tenant_order_number>:latest`, recreates only ACA-scope tagged resources in `italynorth`, deploys one always-on Container App, verifies public health/browser behavior, and confirms the ACR repository contains only the `latest` tag.
 - `deploy-awa.cmd` locally publishes ASP.NET for `linux-x64` with the React SPA in `wwwroot`, deploys one ZIP to a single Linux Azure Web App on a Basic always-on App Service Plan, installs Playwright runtime dependencies at startup, and verifies public health/browser behavior without Docker or ACR.

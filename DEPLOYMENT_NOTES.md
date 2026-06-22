@@ -5,7 +5,7 @@
 - Azure subscription: `az2vs`
 - Azure resource group: per tenant, `rg-<tenant_id>-<tenant_order_number>`
 - Azure location: `italynorth`
-- Image policy for ACA: one repository/tag, `oyako:latest`
+- Image policy for ACA: one repository/tag, `<tenant_name>-<tenant_order_number>:latest`
 
 ## Minimal Azure Resources
 
@@ -15,7 +15,7 @@
 - Azure Container Apps Environment
 - Azure Container App with one always-on replica
 
-For cutover from the previous pre-alpha ACA script, `deploy-aca.cmd` removes only script-owned resources after the new deployment passes smoke tests. It does not remove unrelated untagged resources or shared AI resources.
+Application resources must not be deployed to `rg-oyako`; that resource group is reserved for shared Azure AI/Cognitive Services resources. The one-time cutover removes non-AI application resources from `rg-oyako` while preserving `Microsoft.CognitiveServices/*`.
 
 ACA default hostnames are Azure-managed and include the Container Apps Environment suffix:
 
@@ -34,17 +34,20 @@ The scripts do not create Azure Storage Account, Static Web App, separate API Ap
 
 ## Tenant Naming
 
-Tenant configuration is loaded from `.tenants/<tenant-name>.env`. The real `.env` files are ignored by Git; commit only `.env.example` templates. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
+Tenant configuration is discovered by traversing `.tenants/*.env`. The real `.env` files are ignored by Git; commit only `.env.example` templates. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
 
 Required tenant keys include:
 
 - `tenant_id`: 32 lowercase hex characters.
 - `tenant_order_number`: positive integer, starting at `1` per tenant identity.
 - `tenant_name`: must match the selected `<tenant-name>`.
+- `tenant_enabled`: must be `true` for run/deploy; missing or `false` means disabled.
 - `tenant_azure_domain_name`: used as the Azure Web App name and ACA app name.
 - `tenant_custom_domain_name`: optional custom hostname. Scripts warn and continue if DNS or Azure hostname binding is not ready.
 
 Resource groups are tenant-scoped: `rg-<tenant_id>-<tenant_order_number>`.
+ACA registry names are tenant-scoped and deterministic: `acr<tenant_order_number><tenant_id>`.
+ACA image repositories are tenant-scoped and deterministic: `<tenant_name>-<tenant_order_number>:latest`.
 
 `deploy-awa.cmd` checks App Service global name availability before local build/publish. If `<tenant_azure_domain_name>` is unavailable or belongs to an unowned app, the script fails before Azure mutation and the tenant env file must be changed or the name reclaimed in Azure.
 
@@ -70,7 +73,7 @@ Tenant `.env` files may contain deployment names, public branding, and local SQL
 
 ## Tenant Brand Assets
 
-Tenant brand logo SVGs are served locally from `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` so deployed pages do not depend on remote logo hotlinks. The current examples are derived from public Wikimedia SVG assets for OYAK and generic-tenant; verify trademark and brand usage approvals before public production rollout.
+Tenant brand logo SVGs are served locally from `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` so deployed pages do not depend on remote logo hotlinks. Verify trademark and brand usage approvals before public production rollout.
 
 ## Playwright and Browser Health
 

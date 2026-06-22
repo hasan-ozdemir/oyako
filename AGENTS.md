@@ -57,10 +57,12 @@ Oyako is a Turkish full-stack question-answer platform. It uses a React + TypeSc
 
 - Local Docker can include local-development behavior.
 - Azure Container Apps image must include Azure and Ollama Cloud providers; Ollama Local is disabled in Azure.
-- `deploy-aca.cmd` deploys one image: `oyako:latest`.
+- `deploy-aca.cmd` deploys one image: `<tenant_name>-<tenant_order_number>:latest`.
 - `deploy-awa.cmd` deploys the locally published ASP.NET app and embedded React SPA directly to one Linux Azure Web App without Docker or ACR.
-- Azure ACR should retain only the latest `oyako:latest` image for this pre-alpha flow.
+- Azure ACR should retain only the latest `<tenant_name>-<tenant_order_number>:latest` image for this pre-alpha flow.
 - Azure deploy target uses subscription `az2vs`, location `italynorth`, and per-tenant resource groups named `rg-<tenant_id>-<tenant_order_number>`.
+- `rg-oyako` is reserved for Azure AI/Cognitive Services only; app, ACR, ACA, Web App, and App Service Plan resources must not be created there.
+- Tenant discovery is `.tenants/*.env` traversal. Do not add code-level tenant allow-lists; use `tenant_enabled=true` in the tenant env file to activate a tenant.
 
 ## Documentation Discipline
 
