@@ -120,6 +120,7 @@ public sealed class PlaywrightPageRenderer : IPageRenderer, IAsyncDisposable
         _browser = await RunWithinRemainingAsync(
             () => _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {
+                Channel = "chromium",
                 Headless = true,
                 Timeout = Math.Max(1, RemainingMilliseconds(deadline)),
                 Args = new[]

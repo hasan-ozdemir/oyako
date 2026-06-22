@@ -26,6 +26,7 @@ if (args.Any(arg => string.Equals(arg, "--verify-playwright", StringComparison.O
     using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
     await using var browser = await playwright.Chromium.LaunchAsync(new Microsoft.Playwright.BrowserTypeLaunchOptions
     {
+        Channel = "chromium",
         Headless = true,
         Timeout = 60000,
         Args = new[]
