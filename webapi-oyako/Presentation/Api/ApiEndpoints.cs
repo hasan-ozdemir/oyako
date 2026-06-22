@@ -1642,12 +1642,15 @@ public static class ApiEndpoints
     private static string BuildTitleFromUrl(string url)
     {
         // Creates the object needed for the next step of the workflow.
-        var path = new Uri(url).AbsolutePath.Trim('/');
+        var uri = new Uri(url);
+        var path = uri.AbsolutePath.Trim('/');
         // Guards the following branch so the workflow handles this condition deliberately.
         if (string.IsNullOrWhiteSpace(path))
         {
             // Returns the computed result to the caller and completes this branch of the workflow.
-            return "Oyak Dijital";
+            return uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+                ? uri.Host[4..]
+                : uri.Host;
         }
 
         // Returns the computed result to the caller and completes this branch of the workflow.

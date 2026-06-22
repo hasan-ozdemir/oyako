@@ -1,6 +1,8 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/Application/Services/KnowledgeTextCleaner.cs for maintainers.
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
 using webapi_oyako.Domain.Services;
+using webapi_oyako.Infrastructure.Configuration;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
 namespace webapi_oyako.Application.Services;
@@ -10,32 +12,88 @@ public sealed class KnowledgeTextCleaner : IKnowledgeTextCleaner
 {
     // Executes this component behavior as part of the Oyako application flow.
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
-    private static readonly Regex LeadingBoilerplateRegex = new(
-        @"^(?:(?:Çözümler|Teknolojilerimiz|Hakkımızda|Bize Ulaşın|Referanslarımız|Politikalarımız|OYAK Dijital|Anasayfa|Keşfet|İletişim|Yasal Uyarı|Kişisel Verilerin Korunması|Bilgi Güvenliği Politikası|Hizmet Yönetim Politikası|İş Sürekliliği Politikası|Yapay Zeka Yönetim Sistemi Politikası|Aydınlatma Metni|Çerez Politikası)\s*)+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly string[] DefaultLeadingBoilerplateTerms =
+    [
+        "Anasayfa",
+        "Hakkımızda",
+        "Bize Ulaşın",
+        "İletişim",
+        "Yasal Uyarı",
+        "Kişisel Verilerin Korunması",
+        "Aydınlatma Metni",
+        "Çerez Politikası"
+    ];
 
-    private static readonly string[] ExactBoilerplateLines =
+    private static readonly string[] DefaultExactBoilerplateLines =
+    [
+        "anasayfa",
+        "hakkımızda",
+        "bize ulaşın",
+        "iletişim",
+        "yasal uyarı",
+        "kişisel verilerin korunması",
+        "aydınlatma metni",
+        "çerez politikası"
+    ];
+
+    private static readonly string[] DefaultFooterLinePrefixes =
+    [
+        "© ",
+        "tüm hakları saklıdır",
+        "bu sitedeki deneyiminizi çerezlere izin vererek"
+    ];
+
+    private static readonly string[] DefaultExactSectionLines =
     [
         "çözümler",
         "teknolojilerimiz",
-        "hakkımızda",
-        "bize ulaşın",
         "referanslarımız",
         "politikalarımız",
-        "oyak dijital",
-        "yasal uyarı",
-        "kişisel verilerin korunması",
         "bilgi güvenliği politikası",
         "hizmet yönetim politikası",
         "iş sürekliliği politikası",
-        "yapay zeka yönetim sistemi politikası",
-        "aydınlatma metni",
-        "çerez politikası",
-        "anasayfa",
-        "keşfet",
-        "iletişim",
-        "© 2026 oyak dijital tüm hakları saklıdır."
+        "yapay zeka yönetim sistemi politikası"
     ];
+
+    private readonly Regex _leadingBoilerplateRegex;
+    private readonly HashSet<string> _exactBoilerplateLines;
+    private readonly string[] _footerLinePrefixes;
+
+    public KnowledgeTextCleaner()
+        : this(Options.Create(new TenantOptions()))
+    {
+    }
+
+    public KnowledgeTextCleaner(IOptions<TenantOptions> tenantOptions)
+    {
+        var options = tenantOptions.Value;
+        var leadingTerms = DefaultLeadingBoilerplateTerms
+            .Concat(options.TextCleanerLeadingBoilerplateTerms)
+            .Select(NormalizeLine)
+            .Where(static value => value.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(Regex.Escape)
+            .ToArray();
+
+        _leadingBoilerplateRegex = new Regex(
+            $"^(?:(?:{string.Join("|", leadingTerms)})\\s*)+",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        _exactBoilerplateLines = DefaultExactBoilerplateLines
+            .Concat(DefaultExactSectionLines)
+            .Concat(options.TextCleanerExactBoilerplateLines)
+            .Select(NormalizeLine)
+            .Where(static value => value.Length > 0)
+            .Select(static value => value.ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _footerLinePrefixes = DefaultFooterLinePrefixes
+            .Concat(options.TextCleanerFooterLinePrefixes)
+            .Select(NormalizeLine)
+            .Where(static value => value.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 
     // Executes this component behavior as part of the Oyako application flow.
     public string Clean(string text)
@@ -137,13 +195,13 @@ public sealed class KnowledgeTextCleaner : IKnowledgeTextCleaner
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static string RemoveLeadingBoilerplate(string value)
+    private string RemoveLeadingBoilerplate(string value)
     {
         var current = NormalizeLine(value);
         string next;
         do
         {
-            next = LeadingBoilerplateRegex.Replace(current, string.Empty).Trim();
+            next = _leadingBoilerplateRegex.Replace(current, string.Empty).Trim();
             // Guards the following branch so the workflow handles this condition deliberately.
             if (string.Equals(next, current, StringComparison.Ordinal))
             {
@@ -160,16 +218,12 @@ public sealed class KnowledgeTextCleaner : IKnowledgeTextCleaner
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static bool IsBoilerplateLine(string line)
+    private bool IsBoilerplateLine(string line)
     {
         var normalized = NormalizeLine(line).ToLowerInvariant();
         // Returns the computed result to the caller and completes this branch of the workflow.
-        return ExactBoilerplateLines.Contains(normalized)
-            || normalized.StartsWith("© ", StringComparison.Ordinal)
-            || normalized.StartsWith("tüm hakları saklıdır", StringComparison.Ordinal)
-            || normalized.StartsWith("bu sitedeki deneyiminizi çerezlere izin vererek", StringComparison.Ordinal)
-            || normalized is "kurumsal uygulama" or "dijital dönüşüm ve yapay zeka" or "dijital dönüşüm ve yapay zekâ"
-                or "yönetilen hizmetler" or "bulut ve teknoloji çözümleri";
+        return _exactBoilerplateLines.Contains(normalized)
+            || _footerLinePrefixes.Any(prefix => normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     // Executes this component behavior as part of the Oyako application flow.
@@ -182,7 +236,7 @@ public sealed class KnowledgeTextCleaner : IKnowledgeTextCleaner
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private static bool IsUsefulPreviewLine(string line)
+    private bool IsUsefulPreviewLine(string line)
     {
         // Returns the computed result to the caller and completes this branch of the workflow.
         return line.Length >= 24

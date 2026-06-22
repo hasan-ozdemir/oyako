@@ -14,7 +14,7 @@ public sealed class CrawlerOptions
     public int MaxDepth { get; set; } = 10;
     // Keeps automatic website crawling constrained to the configured source domain by default.
     public bool DomainOnlyCrawling { get; set; } = true;
-    // Allows source-owned subdomains such as bagis.generic-tenant.org.tr for a www.generic-tenant.org.tr seed.
+    // Allows source-owned subdomains such as donate.example.org for a www.example.org seed.
     public bool IncludeSubdomains { get; set; } = true;
     // Exposes data consumed by other layers while preserving the domain or DTO shape.
     public int RequestTimeoutSeconds { get; set; } = 5;

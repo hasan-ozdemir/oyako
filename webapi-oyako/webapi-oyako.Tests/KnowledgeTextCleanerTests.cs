@@ -1,5 +1,7 @@
 // Codex developer note: Explains the purpose and flow of webapi-oyako/webapi-oyako.Tests/KnowledgeTextCleanerTests.cs for maintainers.
 using webapi_oyako.Application.Services;
+using Microsoft.Extensions.Options;
+using webapi_oyako.Infrastructure.Configuration;
 using Xunit;
 
 // Groups this source file inside the corresponding Oyako architectural namespace.
@@ -13,22 +15,26 @@ public class KnowledgeTextCleanerTests
     public void BuildPreview_RemovesRepeatedNavigationBoilerplate()
     {
         // Creates the object needed for the next step of the workflow.
-        var cleaner = new KnowledgeTextCleaner();
+        var cleaner = new KnowledgeTextCleaner(Options.Create(new TenantOptions
+        {
+            TextCleanerLeadingBoilerplateTerms = ["Demo Menü"],
+            TextCleanerExactBoilerplateLines = ["demo alt menü"],
+            TextCleanerFooterLinePrefixes = ["© demo"]
+        }));
         var preview = cleaner.BuildPreview("""
-            Çözümler
-            Teknolojilerimiz
+            Demo Menü
+            Demo Alt Menü
             Hakkımızda
             Bize Ulaşın
-            Dijital Dönüşüm ve Yapay Zekâ
-            OYAK Dijital, kurumların dijital dönüşüm yolculuğunu hızlandıran çözümler geliştirir.
-            © 2026 OYAK Dijital Tüm hakları saklıdır.
+            Tenant Demo, kurumların bilgi ihtiyacını karşılayan içerikler yayınlar.
+            © demo tüm hakları saklıdır.
             """);
 
         // Verifies the expected behavior for this test scenario.
         // Verifies that the preview no longer starts with repeated navigation boilerplate.
-        Assert.False(preview.StartsWith("Çözümler", StringComparison.Ordinal));
+        Assert.False(preview.StartsWith("Demo Menü", StringComparison.Ordinal));
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("kurumların dijital dönüşüm", preview);
+        Assert.Contains("kurumların bilgi ihtiyacını", preview);
     }
 
     [Fact]
@@ -38,14 +44,14 @@ public class KnowledgeTextCleanerTests
         // Creates the object needed for the next step of the workflow.
         var cleaner = new KnowledgeTextCleaner();
         var cleaned = cleaner.Clean("""
-            Application error: a client-side exception has occurred while loading www.oyakdijital.com.tr.
-            OYAK Dijital, teknoloji ve dijital dönüşümü odağına alan yenilikçi bir firmadır.
+            Application error: a client-side exception has occurred while loading www.tenantdemo.example.
+            Tenant Demo, güvenilir bilgi içerikleri yayınlayan bir kurumdur.
             """);
 
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain("Application error", cleaned);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("teknoloji ve dijital dönüşümü", cleaned);
+        Assert.Contains("güvenilir bilgi içerikleri", cleaned);
     }
 
     [Fact]
