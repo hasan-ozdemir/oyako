@@ -41,9 +41,9 @@ public class ReadyQuestionServiceTests
             {
                 Id = 1,
                 SourceId = 1,
-                WebSourceUrl = "https://www.oyakdijital.com.tr",
-                WebTitle = "Oyak Dijital",
-                WebContent = "Oyak Dijital kurumsal uygulama hizmetleri sunar.",
+                WebSourceUrl = "https://www.tenantdemo.example",
+                WebTitle = "Tenant Demo",
+                WebContent = "Tenant Demo kurumsal uygulama hizmetleri sunar.",
                 ContentHash = "hash-1"
             }
         };
@@ -52,7 +52,7 @@ public class ReadyQuestionServiceTests
             // Creates the object needed for the next step of the workflow.
             new ReadyQuestion { Text = "Eski soru?", SourceFingerprint = "old", CreatedAtUtc = DateTime.UtcNow }
         };
-        var llmResponse = string.Join("\n", Enumerable.Range(1, 100).Select(i => $"1|Oyak Dijital hakkında {i} numaralı soru nedir?"));
+        var llmResponse = string.Join("\n", Enumerable.Range(1, 100).Select(i => $"1|Tenant Demo hakkında {i} numaralı soru nedir?"));
         var services = CreateServices(pages, oldQuestions, llmResponse);
         var service = services.GetRequiredService<IReadyQuestionService>();
         var repository = (InMemoryReadyQuestionRepository)services.GetRequiredService<IReadyQuestionRepository>();
@@ -85,9 +85,9 @@ public class ReadyQuestionServiceTests
             {
                 Id = index,
                 SourceId = 1,
-                WebSourceUrl = $"https://www.oyakdijital.com.tr/kaynak-{index}",
-                WebTitle = $"Kaynak {index} | OYAK Dijital",
-                WebContent = $"Kaynak {index} Oyak Dijital hizmet ve cozum bilgileri.",
+                WebSourceUrl = $"https://www.tenantdemo.example/kaynak-{index}",
+                WebTitle = $"Kaynak {index} | Tenant Demo",
+                WebContent = $"Kaynak {index} Tenant Demo hizmet ve cozum bilgileri.",
                 ContentHash = $"hash-{index}"
             })
             .ToArray();
@@ -96,7 +96,7 @@ public class ReadyQuestionServiceTests
             // Creates the object needed for the next step of the workflow.
             new ReadyQuestion { Text = "Eski soru?", SourceFingerprint = "old", CreatedAtUtc = DateTime.UtcNow }
         };
-        var services = CreateServices(pages, oldQuestions, "1|Oyak Dijital kaynaklarından gelen ilk soru nedir?");
+        var services = CreateServices(pages, oldQuestions, "1|Tenant Demo kaynaklarından gelen ilk soru nedir?");
         var service = services.GetRequiredService<IReadyQuestionService>();
         var repository = (InMemoryReadyQuestionRepository)services.GetRequiredService<IReadyQuestionRepository>();
 
@@ -122,9 +122,9 @@ public class ReadyQuestionServiceTests
             {
                 Id = index,
                 SourceId = 1,
-                WebSourceUrl = $"https://www.oyakdijital.com.tr/belge-{index}",
-                WebTitle = $"Belge {index} | OYAK Dijital",
-                WebContent = $"Belge {index} Oyak Dijital bilgi kaynagi.",
+                WebSourceUrl = $"https://www.tenantdemo.example/belge-{index}",
+                WebTitle = $"Belge {index} | Tenant Demo",
+                WebContent = $"Belge {index} Tenant Demo bilgi kaynagi.",
                 ContentHash = $"hash-{index}"
             })
             .ToArray();
@@ -184,9 +184,9 @@ public class ReadyQuestionServiceTests
             {
                 Id = 1,
                 SourceId = 1,
-                WebSourceUrl = "https://www.oyakdijital.com.tr",
-                WebTitle = "Oyak Dijital",
-                WebContent = "Oyak Dijital kurumsal uygulama hizmetleri sunar.",
+                WebSourceUrl = "https://www.tenantdemo.example",
+                WebTitle = "Tenant Demo",
+                WebContent = "Tenant Demo kurumsal uygulama hizmetleri sunar.",
                 ContentHash = "hash-1"
             }
         };
@@ -244,19 +244,19 @@ public class ReadyQuestionServiceTests
     {
         Id = "013dfb35-0ed6-4e32-4a80-5eae86646ddf",
         OrderNumber = 1,
-        Name = "oyakdijital",
-        DisplayName = "Oyak Dijital",
+        Name = "tenantdemo",
+        DisplayName = "Tenant Demo",
         AzureDomainName = "oyako",
-        WebUrl = "https://www.oyakdijital.com.tr",
-        AdminEmail = "admin@oyakdijital.com.tr",
-        FeedbackEmail = "iletisim@oyakdijital.com.tr",
-        UiWebBrandName = "Oyak Dijital",
+        WebUrl = "https://www.tenantdemo.example",
+        AdminEmail = "admin@tenantdemo.example",
+        FeedbackEmail = "iletisim@tenantdemo.example",
+        UiWebBrandName = "Tenant Demo",
         UiWebAssistantName = "Oyako",
-        UiWebTitle = "Oyako: Oyak Dijital Soru-Cevap Platformu",
-        UiWebHeaderTitle = "Oyak Dijital soru-cevap platformu",
-        UiWebBrandLogoUrl = "https://www.oyakdijital.com.tr/logo.svg",
+        UiWebTitle = "Oyako: Tenant Demo Soru-Cevap Platformu",
+        UiWebHeaderTitle = "Tenant Demo soru-cevap platformu",
+        UiWebBrandLogoUrl = "https://www.tenantdemo.example/logo.svg",
         UiWebAssistantWelcomeMessage = "Merhaba, ben Oyako.",
-        UiWebAssistantHeaderTitle = "Oyak Dijital hakkında sorun:",
+        UiWebAssistantHeaderTitle = "Tenant Demo hakkında sorun:",
         UiWebKnowledgeBankHeaderTitle = "Bilgi Bankası",
         UiWebKnowledgeSourceHeaderTitle = "Bilgi Kaynakları",
         UiWebKnowledgeSourceHeaderMessage = "Aşağıda {sourceCount} kaynak ve {documentCount} belge var.",
@@ -268,7 +268,7 @@ public class ReadyQuestionServiceTests
             {
                 Key = "source_1",
                 Type = "web_site",
-                Url = "https://www.oyakdijital.com.tr",
+                Url = "https://www.tenantdemo.example",
                 RefreshPeriod = "1hour"
             }
         ]

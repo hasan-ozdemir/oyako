@@ -12,15 +12,15 @@ public sealed class KnowledgeFileParserTests
     public async Task ParseAsync_MarkdownFile_ReturnsNormalizedContentAndPreview()
     {
         var parser = new KnowledgeFileParser();
-        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Baslik\r\n\r\nOyak Dijital hizmetleri hakkinda temiz icerik."));
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Baslik\r\n\r\nTenant Demo hizmetleri hakkinda temiz icerik."));
 
         var parsed = await parser.ParseAsync(stream, "bilgi.md", CancellationToken.None);
 
         Assert.Equal("bilgi.md", parsed.FileName);
         Assert.Equal(".md", parsed.Extension);
         Assert.Equal("parsed", parsed.ParseStatus);
-        Assert.Contains("Oyak Dijital hizmetleri", parsed.Content);
-        Assert.Contains("Oyak Dijital hizmetleri", parsed.ContentPreview);
+        Assert.Contains("Tenant Demo hizmetleri", parsed.Content);
+        Assert.Contains("Tenant Demo hizmetleri", parsed.ContentPreview);
         Assert.False(string.IsNullOrWhiteSpace(parsed.FileHash));
         Assert.False(string.IsNullOrWhiteSpace(parsed.ContentHash));
     }

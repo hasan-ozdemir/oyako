@@ -40,23 +40,23 @@ export async function mockOyakoApi(page: Page) {
   const tenantConfig = {
     tenantId: '013dfb350ed64e324a805eae86646ddf',
     tenantOrderNumber: '1',
-    tenantName: 'oyakdijital',
-    tenantDisplayName: 'Oyak Dijital',
+    tenantName: 'tenantdemo',
+    tenantDisplayName: 'Tenant Demo',
     tenantAzureDomainName: 'oyako',
-    tenantCustomDomainName: 'oyako.oyakdijital.com.tr',
-    tenantWebUrl: 'https://www.oyakdijital.com.tr',
-    tenantAdminEmail: 'admin@oyakdijital.com.tr',
-    tenantFeedbackEmail: 'iletisim@oyakdijital.com.tr',
+    tenantCustomDomainName: 'oyako.tenantdemo.example',
+    tenantWebUrl: 'https://www.tenantdemo.example',
+    tenantAdminEmail: 'admin@tenantdemo.example',
+    tenantFeedbackEmail: 'iletisim@tenantdemo.example',
     primaryAiProvider: 'ollama-cloud',
     secondaryAiProvider: 'azure',
-    uiWebBrandName: 'Oyak Dijital',
+    uiWebBrandName: 'Tenant Demo',
     uiWebAssistantName: 'Oyako',
-    uiWebTitle: 'Oyako: Oyak Dijital Soru-Cevap Platformu',
-    uiWebHeaderTitle: 'Oyak Dijital soru-cevap platformu',
-    uiWebBrandLogoUrl: '/tenants/oyakdijital/brand-logo.svg',
-    uiWebAssistantWelcomeMessage: 'Merhaba, ben dijital asistanınız Oyako. Oyak Dijital ile ilgili merak ettiğiniz her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.',
-    uiWebAssistantHeaderTitle: 'Oyak Dijital hakkında öğrenmek istediğinizi sorun:',
-    uiWebMoreMenuBrandLink: 'Oyak Dijital',
+    uiWebTitle: 'Oyako: Tenant Demo Soru-Cevap Platformu',
+    uiWebHeaderTitle: 'Tenant Demo soru-cevap platformu',
+    uiWebBrandLogoUrl: '/icons/oyako-icon.svg',
+    uiWebAssistantWelcomeMessage: 'Merhaba, ben dijital asistanınız Oyako. Tenant Demo ile ilgili merak ettiğiniz her şeyi bana sorabilirsiniz. Cevaplamak için hazırım.',
+    uiWebAssistantHeaderTitle: 'Tenant Demo hakkında öğrenmek istediğinizi sorun:',
+    uiWebMoreMenuBrandLink: 'Tenant Demo',
     uiWebMoreMenuFeedbackLink: 'Geri Bildirim Gönderin',
     uiWebMoreMenuHelpLink: 'Yardım',
     uiWebSettingsPageTitle: 'Ayarlar',
@@ -74,9 +74,9 @@ export async function mockOyakoApi(page: Page) {
       {
         id: 1,
         sourceType: 'web_site',
-        name: 'Oyak Dijital',
-        description: 'Oyak Dijital web sitesi',
-        address: 'https://www.oyakdijital.com.tr',
+        name: 'Tenant Demo',
+        description: 'Tenant Demo web sitesi',
+        address: 'https://www.tenantdemo.example',
         protocol: 'https',
         isEnabled: true,
         isArchived: false,
@@ -114,12 +114,12 @@ export async function mockOyakoApi(page: Page) {
       {
         id: 11,
         sourceId: 1,
-        sourceName: 'Oyak Dijital',
+        sourceName: 'Tenant Demo',
         sourceType: 'web_site',
         title: 'Dijital Dönüşüm ve Yapay Zekâ',
-        url: 'https://www.oyakdijital.com.tr/cozumler/dijital-donusum-ve-yapay-zeka',
-        content: 'OYAK Dijital, kurumların dijital dönüşüm yolculuğunu hızlandıran yapay zekâ ve veri odaklı çözümler geliştirir.',
-        contentPreview: 'OYAK Dijital, kurumların dijital dönüşüm yolculuğunu hızlandıran yapay zekâ ve veri odaklı çözümler geliştirir.',
+        url: 'https://www.tenantdemo.example/cozumler/dijital-donusum-ve-yapay-zeka',
+        content: 'Tenant Demo, kurumların dijital dönüşüm yolculuğunu hızlandıran yapay zekâ ve veri odaklı çözümler geliştirir.',
+        contentPreview: 'Tenant Demo, kurumların dijital dönüşüm yolculuğunu hızlandıran yapay zekâ ve veri odaklı çözümler geliştirir.',
         isEnabled: true,
         isArchived: false,
         statusCode: 'ok',
@@ -134,10 +134,10 @@ export async function mockOyakoApi(page: Page) {
       {
         id: 12,
         sourceId: 1,
-        sourceName: 'Oyak Dijital',
+        sourceName: 'Tenant Demo',
         sourceType: 'web_site',
         title: 'Yönetilen Hizmetler',
-        url: 'https://www.oyakdijital.com.tr/cozumler/yonetilen-hizmetler',
+        url: 'https://www.tenantdemo.example/cozumler/yonetilen-hizmetler',
         content: 'Profesyonel yönetilen hizmetler ile işletmelerin teknoloji operasyonları güvenli ve sürdürülebilir şekilde desteklenir.',
         contentPreview: 'Profesyonel yönetilen hizmetler ile işletmelerin teknoloji operasyonları güvenli ve sürdürülebilir şekilde desteklenir.',
         isEnabled: true,
@@ -158,8 +158,8 @@ export async function mockOyakoApi(page: Page) {
         sourceType: 'local_files',
         title: 'Kurumsal Dosya',
         url: 'local-file://kurumsal-dosya.md',
-        content: 'Yerel dosya içeriği OYAK Dijital süreçlerini açıklar.',
-        contentPreview: 'Yerel dosya içeriği OYAK Dijital süreçlerini açıklar.',
+        content: 'Yerel dosya içeriği Tenant Demo süreçlerini açıklar.',
+        contentPreview: 'Yerel dosya içeriği Tenant Demo süreçlerini açıklar.',
         isEnabled: true,
         isArchived: false,
         statusCode: 'ok',
@@ -272,8 +272,8 @@ export async function mockOyakoApi(page: Page) {
     await route.fulfill({
       json: {
         questions: [
-          { text: 'Oyak Dijital hangi hizmetleri sunar?' },
-          { text: 'Oyak Dijital yapay zeka alanında ne yapıyor?' },
+          { text: 'Tenant Demo hangi hizmetleri sunar?' },
+          { text: 'Tenant Demo yapay zeka alanında ne yapıyor?' },
           { text: 'Yönetilen hizmetler nelerdir?' },
           { text: 'Bilgi güvenliği yaklaşımı nedir?' },
         ],
@@ -302,8 +302,8 @@ export async function mockOyakoApi(page: Page) {
             fileName: 'oyako-test.md',
             relativePath: 'oyako-test.md',
             defaultTitle: 'Oyako Test Belgesi',
-            content: 'Oyako test dosyası OYAK Dijital bilgi bankası için temiz metin içerir.',
-            contentPreview: 'Oyako test dosyası OYAK Dijital bilgi bankası için temiz metin içerir.',
+            content: 'Oyako test dosyası Tenant Demo bilgi bankası için temiz metin içerir.',
+            contentPreview: 'Oyako test dosyası Tenant Demo bilgi bankası için temiz metin içerir.',
             parseStatus: 'parsed',
             ocrStatus: 'not_required',
             errorMessage: null,
@@ -339,8 +339,8 @@ export async function mockOyakoApi(page: Page) {
             sourceType: source.sourceType,
             title: documentTitle,
             url: `local-file://${documentTitle.toLowerCase().replaceAll(' ', '-')}.md`,
-            content: 'Oyako test dosyası OYAK Dijital bilgi bankası için temiz metin içerir.',
-            contentPreview: 'Oyako test dosyası OYAK Dijital bilgi bankası için temiz metin içerir.',
+            content: 'Oyako test dosyası Tenant Demo bilgi bankası için temiz metin içerir.',
+            contentPreview: 'Oyako test dosyası Tenant Demo bilgi bankası için temiz metin içerir.',
             isEnabled: true,
             isArchived: false,
             statusCode: 'ok',
@@ -389,8 +389,8 @@ export async function mockOyakoApi(page: Page) {
             sourceType: source.sourceType,
             title,
             url: body.url || 'https://example.com/manual',
-            content: `${title} OYAK Dijital bilgi bankasına manuel web bağlantısı olarak eklendi.`,
-            contentPreview: `${title} OYAK Dijital bilgi bankasına manuel web bağlantısı olarak eklendi.`,
+            content: `${title} Tenant Demo bilgi bankasına manuel web bağlantısı olarak eklendi.`,
+            contentPreview: `${title} Tenant Demo bilgi bankasına manuel web bağlantısı olarak eklendi.`,
             isEnabled: body.isEnabled ?? true,
             isArchived: false,
             statusCode: 'ok',
@@ -597,8 +597,8 @@ export async function mockOyakoApi(page: Page) {
           ? {
               ...document,
               url: body.url || document.url,
-              content: `Güncellenmiş web bağlantısı ${body.url || document.url} OYAK Dijital bilgi bankasında kullanılabilir.`,
-              contentPreview: `Güncellenmiş web bağlantısı ${body.url || document.url} OYAK Dijital bilgi bankasında kullanılabilir.`,
+              content: `Güncellenmiş web bağlantısı ${body.url || document.url} Tenant Demo bilgi bankasında kullanılabilir.`,
+              contentPreview: `Güncellenmiş web bağlantısı ${body.url || document.url} Tenant Demo bilgi bankasında kullanılabilir.`,
               statusCode: 'ok',
               statusLabel: 'Tamam',
               statusMessage: 'Belge bağlantısı güncellendi.',
@@ -746,6 +746,33 @@ export async function mockOyakoApi(page: Page) {
     })
   })
 
+  await page.route('**/api/knowledge-refresh-settings', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { refreshPeriodValue?: number; refreshPeriodUnit?: 'minute' | 'hour' | 'day' | 'week' }
+      const value = body.refreshPeriodValue ?? 1
+      const unit = body.refreshPeriodUnit ?? 'hour'
+      const minutes = unit === 'minute' ? value : unit === 'hour' ? value * 60 : unit === 'day' ? value * 1440 : value * 10080
+      await route.fulfill({
+        json: {
+          refreshPeriodValue: value,
+          refreshPeriodUnit: unit,
+          refreshPeriodMinutes: minutes,
+          updatedAtUtc: now(),
+        },
+      })
+      return
+    }
+
+    await route.fulfill({
+      json: {
+        refreshPeriodValue: 1,
+        refreshPeriodUnit: 'hour',
+        refreshPeriodMinutes: 60,
+        updatedAtUtc: now(),
+      },
+    })
+  })
+
   await page.route('**/api/qna-experience-settings', async (route) => {
     await route.fulfill({
       json: {
@@ -766,7 +793,7 @@ export async function mockOyakoApi(page: Page) {
       body: [
         'data: {"type":"phase","phase":"asking"}',
         '',
-        'data: {"type":"answer","answer_content":"<p>Oyak Dijital; dijital dönüşüm, yapay zekâ, kurumsal uygulama ve yönetilen hizmetler alanlarında hizmet sunar.</p>","suggested_questions":["Yönetilen hizmetler nelerdir?","Yapay zekâ hizmetleri nelerdir?"]}',
+        'data: {"type":"answer","answer_content":"<p>Tenant Demo; dijital dönüşüm, yapay zekâ, kurumsal uygulama ve yönetilen hizmetler alanlarında hizmet sunar.</p>","suggested_questions":["Yönetilen hizmetler nelerdir?","Yapay zekâ hizmetleri nelerdir?"]}',
         '',
         'data: [DONE]',
         '',

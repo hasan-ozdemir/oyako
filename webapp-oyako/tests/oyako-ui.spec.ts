@@ -55,7 +55,7 @@ test('main UI remains usable across core interactions', async ({ page }) => {
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('button', { name: 'Yeni Sohbet' })).toBeVisible()
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByRole('link', { name: 'Oyak Dijital' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Tenant Demo' })).toBeVisible()
 
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByLabel('Kullanıcı: Ziyaretçi').click()
@@ -171,7 +171,7 @@ for (const viewport of overflowViewports) {
     // Awaits the asynchronous frontend operation before continuing.
     await expect(settingsDialog).toBeHidden()
 
-    const longQuestion = Array.from({ length: 120 }, (_, index) => `Oyak Dijital hizmetleri hakkında çok uzun soru satırı ${index + 1}`).join('\n')
+    const longQuestion = Array.from({ length: 120 }, (_, index) => `Tenant Demo hizmetleri hakkında çok uzun soru satırı ${index + 1}`).join('\n')
     // Awaits the asynchronous frontend operation before continuing.
     await page.getByRole('textbox', { name: 'Soru' }).fill(longQuestion)
     // Awaits the asynchronous frontend operation before continuing.
@@ -253,7 +253,7 @@ test('long assistant answers remain inside the answer panel scroll area', async 
   await mockOyakoApi(page)
   // Awaits the asynchronous frontend operation before continuing.
   await page.route('**/api/chat/stream', async (route) => {
-    const rows = Array.from({ length: 80 }, (_, index) => `<p>Uzun yanıt satırı ${index + 1}: Oyak Dijital bilgi bankası içeriği panel içinde okunur.</p>`).join('')
+    const rows = Array.from({ length: 80 }, (_, index) => `<p>Uzun yanıt satırı ${index + 1}: Tenant Demo bilgi bankası içeriği panel içinde okunur.</p>`).join('')
     // Awaits the asynchronous frontend operation before continuing.
     await route.fulfill({
       contentType: 'text/event-stream',
@@ -271,7 +271,7 @@ test('long assistant answers remain inside the answer panel scroll area', async 
   await page.goto('/')
 
   // Awaits the asynchronous frontend operation before continuing.
-  await page.getByRole('textbox', { name: 'Soru' }).fill('Oyak Dijital hangi hizmetleri sunar?')
+  await page.getByRole('textbox', { name: 'Soru' }).fill('Tenant Demo hangi hizmetleri sunar?')
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: 'Sor', exact: true }).click()
 
@@ -374,10 +374,10 @@ test('knowledge bank renders source and document tables with actions', async ({ 
   // Awaits the asynchronous frontend operation before continuing.
   await expect(sourceTable).toContainText('Tamam')
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(documentTable).toContainText('OYAK Dijital')
+  await expect(documentTable).toContainText('Tenant Demo')
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('columnheader', { name: 'Arşivlensin' }).first()).toBeVisible()
-  const sourceRow = sourceTable.getByRole('row', { name: /Oyak Dijital/ })
+  const sourceRow = sourceTable.getByRole('row', { name: /Tenant Demo/ })
   // Awaits the asynchronous frontend operation before continuing.
   await sourceRow.getByLabel('Arşivlensin').selectOption('yes')
   // Awaits the asynchronous frontend operation before continuing.
@@ -430,13 +430,13 @@ test('knowledge bank renders source and document tables with actions', async ({ 
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('dialog', { name: 'Kurumsal Dosya' })).toBeVisible()
   // Awaits the asynchronous frontend operation before continuing.
-  await page.getByLabel('Belge içeriği').fill('Güncellenmiş belge içeriği OYAK Dijital hizmetlerini açıklar.')
+  await page.getByLabel('Belge içeriği').fill('Güncellenmiş belge içeriği Tenant Demo hizmetlerini açıklar.')
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: 'Kaydet' }).click()
   // Awaits the asynchronous frontend operation before continuing.
   await expect(page.getByRole('dialog', { name: 'Kurumsal Dosya' })).toBeHidden()
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(page.getByText('Güncellenmiş belge içeriği OYAK Dijital hizmetlerini açıklar.')).toBeVisible()
+  await expect(page.getByText('Güncellenmiş belge içeriği Tenant Demo hizmetlerini açıklar.')).toBeVisible()
 })
 
 // Checks that modal forms do not lose focus while the user types and expose primary actions first in the DOM.
@@ -456,15 +456,15 @@ test('knowledge bank modal forms preserve typing focus and expose primary action
   await expect(newSourceName).toHaveValue('Odak Testi')
   await newSourceDialog.locator('.document-editor-actions').getByRole('button', { name: 'İptal' }).click()
 
-  const sourceRow = page.locator('section[aria-labelledby="knowledge-sources-title"] table.knowledge-table').getByRole('row', { name: /Oyak Dijital/ })
+  const sourceRow = page.locator('section[aria-labelledby="knowledge-sources-title"] table.knowledge-table').getByRole('row', { name: /Tenant Demo/ })
   await sourceRow.getByRole('button', { name: 'Kaynağı Düzenle' }).click()
-  const sourceEditor = page.getByRole('dialog', { name: 'Oyak Dijital' })
+  const sourceEditor = page.getByRole('dialog', { name: 'Tenant Demo' })
   await expect(sourceEditor.locator('.document-editor-actions button').first()).toContainText('Kaydet')
   const sourceName = sourceEditor.getByLabel('Kaynak ismi')
   await sourceName.fill('')
-  await sourceName.pressSequentially('Oyak Dijital Platform')
+  await sourceName.pressSequentially('Tenant Demo Platform')
   await expect(sourceName).toBeFocused()
-  await expect(sourceName).toHaveValue('Oyak Dijital Platform')
+  await expect(sourceName).toHaveValue('Tenant Demo Platform')
   await sourceEditor.locator('.document-editor-actions').getByRole('button', { name: 'İptal' }).click()
 
   const webDocumentRow = page.locator('section[aria-labelledby="knowledge-documents-title"] table.knowledge-table').getByRole('row', { name: /Dijital Dönüşüm ve Yapay Zekâ/ })
@@ -473,9 +473,9 @@ test('knowledge bank modal forms preserve typing focus and expose primary action
   await expect(linkEditor.locator('.document-editor-actions button').first()).toContainText('Tamam')
   const linkInput = linkEditor.getByLabel('Web Bağlantısı')
   await linkInput.fill('')
-  await linkInput.pressSequentially('https://www.oyakdijital.com.tr/focus-test')
+  await linkInput.pressSequentially('https://www.tenantdemo.example/focus-test')
   await expect(linkInput).toBeFocused()
-  await expect(linkInput).toHaveValue('https://www.oyakdijital.com.tr/focus-test')
+  await expect(linkInput).toHaveValue('https://www.tenantdemo.example/focus-test')
   await linkEditor.locator('.document-editor-actions').getByRole('button', { name: 'İptal' }).click()
 
   await page.getByRole('row', { name: /Yerel Dosyalar/ }).click()
@@ -547,7 +547,7 @@ test('knowledge bank source lifecycles separate lightweight mutations from redow
   await fileChooser.setFiles({
     name: 'oyako-test.md',
     mimeType: 'text/markdown',
-    buffer: Buffer.from('Oyako test dosyası OYAK Dijital bilgi bankası için temiz metin içerir.'),
+    buffer: Buffer.from('Oyako test dosyası Tenant Demo bilgi bankası için temiz metin içerir.'),
   })
   await expect(localDocumentDialog.getByRole('textbox', { name: 'Dosya Başlığı:' })).toHaveValue('Oyako Test Belgesi')
   await localDocumentDialog.getByRole('button', { name: 'Dosyaları Ekle' }).click()
@@ -564,7 +564,7 @@ test('chat flow renders answer and latest suggestions', async ({ page }) => {
   await page.goto('/')
 
   // Awaits the asynchronous frontend operation before continuing.
-  await page.getByRole('textbox', { name: 'Soru' }).fill('Oyak Dijital hangi hizmetleri sunar?')
+  await page.getByRole('textbox', { name: 'Soru' }).fill('Tenant Demo hangi hizmetleri sunar?')
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: 'Sor', exact: true }).click()
 
@@ -585,13 +585,13 @@ test('chat flow renders actionable contact links from assistant answers', async 
   // Awaits the asynchronous frontend operation before continuing.
   await page.route('**/api/chat/stream', async (route) => {
     const answerContent = [
-      '<p>OYAK Dijital iletişim bilgileri:</p>',
+      '<p>Tenant Demo iletişim bilgileri:</p>',
       '<ul>',
-      '<li>E-posta: <a class="oyako-action-link" href="mailto:iletisim@oyakdijital.com.tr" aria-label="E-posta gönder: iletisim@oyakdijital.com.tr">iletisim@oyakdijital.com.tr</a></li>',
+      '<li>E-posta: <a class="oyako-action-link" href="mailto:iletisim@tenantdemo.example" aria-label="E-posta gönder: iletisim@tenantdemo.example">iletisim@tenantdemo.example</a></li>',
       '<li>Telefon: <a class="oyako-action-link" href="tel:+903124441552" aria-label="Telefonla ara: 0 (312) 444 15 52">0 (312) 444 15 52</a></li>',
       '<li>SMS: <a class="oyako-action-link" href="sms:+905321112233" aria-label="SMS gönder: 0532 111 22 33">0532 111 22 33</a></li>',
       '<li>WhatsApp: <a class="oyako-action-link" href="https://wa.me/905321112233" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp ile yaz: 0532 111 22 33">0532 111 22 33</a></li>',
-      '<li>Web: <a class="oyako-action-link" href="https://oyakdijital.com.tr/iletisim" target="_blank" rel="noopener noreferrer" aria-label="Bağlantıyı aç: oyakdijital.com.tr/iletisim">oyakdijital.com.tr/iletisim</a></li>',
+      '<li>Web: <a class="oyako-action-link" href="https://tenantdemo.example/iletisim" target="_blank" rel="noopener noreferrer" aria-label="Bağlantıyı aç: tenantdemo.example/iletisim">tenantdemo.example/iletisim</a></li>',
       '<li>Adres: <a class="oyako-action-link" href="https://www.google.com/maps/search/?api=1&amp;query=Maslak%20Mah.%20Ta%C5%9Fyoncas%C4%B1%20Sk.%20No%3A%201%20Sar%C4%B1yer%20%C4%B0stanbul" target="_blank" rel="noopener noreferrer" aria-label="Haritada aç: Maslak Mah. Taşyoncası Sk. No: 1 Sarıyer İstanbul">Maslak Mah. Taşyoncası Sk. No: 1 Sarıyer İstanbul</a></li>',
       '</ul>',
     ].join('')
@@ -601,7 +601,7 @@ test('chat flow renders actionable contact links from assistant answers', async 
       body: [
         'data: {"type":"phase","phase":"asking"}',
         '',
-        `data: ${JSON.stringify({ type: 'answer', answer_content: answerContent, suggested_questions: ['OYAK Dijital ile nasıl iletişime geçebilirim?'], source_attributions: [] })}`,
+        `data: ${JSON.stringify({ type: 'answer', answer_content: answerContent, suggested_questions: ['Tenant Demo ile nasıl iletişime geçebilirim?'], source_attributions: [] })}`,
         '',
         'data: [DONE]',
         '',
@@ -612,12 +612,12 @@ test('chat flow renders actionable contact links from assistant answers', async 
   await page.goto('/')
 
   // Awaits the asynchronous frontend operation before continuing.
-  await page.getByRole('textbox', { name: 'Soru' }).fill("OYAK Dijital'in iletişim bilgileri nelerdir?")
+  await page.getByRole('textbox', { name: 'Soru' }).fill("Tenant Demo'in iletişim bilgileri nelerdir?")
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: 'Sor', exact: true }).click()
 
   // Defines a reusable frontend value used by the surrounding module.
-  const emailLink = page.getByRole('link', { name: 'E-posta gönder: iletisim@oyakdijital.com.tr' })
+  const emailLink = page.getByRole('link', { name: 'E-posta gönder: iletisim@tenantdemo.example' })
   // Defines a reusable frontend value used by the surrounding module.
   const phoneLink = page.getByRole('link', { name: 'Telefonla ara: 0 (312) 444 15 52' })
   // Defines a reusable frontend value used by the surrounding module.
@@ -625,12 +625,12 @@ test('chat flow renders actionable contact links from assistant answers', async 
   // Defines a reusable frontend value used by the surrounding module.
   const whatsAppLink = page.getByRole('link', { name: 'WhatsApp ile yaz: 0532 111 22 33' })
   // Defines a reusable frontend value used by the surrounding module.
-  const webLink = page.getByRole('link', { name: 'Bağlantıyı aç: oyakdijital.com.tr/iletisim' })
+  const webLink = page.getByRole('link', { name: 'Bağlantıyı aç: tenantdemo.example/iletisim' })
   // Defines a reusable frontend value used by the surrounding module.
   const addressLink = page.getByRole('link', { name: 'Haritada aç: Maslak Mah. Taşyoncası Sk. No: 1 Sarıyer İstanbul' })
 
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(emailLink).toHaveAttribute('href', 'mailto:iletisim@oyakdijital.com.tr')
+  await expect(emailLink).toHaveAttribute('href', 'mailto:iletisim@tenantdemo.example')
   // Awaits the asynchronous frontend operation before continuing.
   await expect(phoneLink).toHaveAttribute('href', 'tel:+903124441552')
   // Awaits the asynchronous frontend operation before continuing.
@@ -640,7 +640,7 @@ test('chat flow renders actionable contact links from assistant answers', async 
   // Awaits the asynchronous frontend operation before continuing.
   await expect(whatsAppLink).toHaveAttribute('rel', 'noopener noreferrer')
   // Awaits the asynchronous frontend operation before continuing.
-  await expect(webLink).toHaveAttribute('href', 'https://oyakdijital.com.tr/iletisim')
+  await expect(webLink).toHaveAttribute('href', 'https://tenantdemo.example/iletisim')
   // Awaits the asynchronous frontend operation before continuing.
   await expect(addressLink).toHaveAttribute('href', /google\.com\/maps\/search/)
   // Awaits the asynchronous frontend operation before continuing.
@@ -674,7 +674,7 @@ test('dismissed message dialogs remove their visual and live-region copy', async
   // Defines a reusable frontend value used by the surrounding module.
   const friendlyMessage = 'Oyako servislerine şu anda ulaşılamıyor. Lütfen bağlantınızı kontrol edip tekrar deneyin.'
   // Awaits the asynchronous frontend operation before continuing.
-  await page.getByRole('textbox', { name: 'Soru' }).fill('OYAK Dijital iletişim bilgileri nelerdir?')
+  await page.getByRole('textbox', { name: 'Soru' }).fill('Tenant Demo iletişim bilgileri nelerdir?')
   // Awaits the asynchronous frontend operation before continuing.
   await page.getByRole('button', { name: 'Sor', exact: true }).click()
 

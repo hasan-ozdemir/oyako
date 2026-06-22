@@ -13,13 +13,13 @@ public class UrlNormalizerTests
     public void TryNormalize_CanonicalizesSameHostLinks()
     {
         // Creates the object needed for the next step of the workflow.
-        var baseUri = new Uri("https://oyakdijital.com.tr");
+        var baseUri = new Uri("https://tenantdemo.example");
         var ok = UrlNormalizer.TryNormalize(baseUri, "/Hakkimizda/", out var normalized);
 
         // Verifies the expected behavior for this test scenario.
         Assert.True(ok);
         // Verifies the expected behavior for this test scenario.
-        Assert.Equal("https://oyakdijital.com.tr/Hakkimizda", normalized);
+        Assert.Equal("https://tenantdemo.example/Hakkimizda", normalized);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class UrlNormalizerTests
     public void TryNormalize_RejectsExternalDomains()
     {
         // Creates the object needed for the next step of the workflow.
-        var baseUri = new Uri("https://oyakdijital.com.tr");
+        var baseUri = new Uri("https://tenantdemo.example");
         var ok = UrlNormalizer.TryNormalize(baseUri, "https://google.com", out var normalized);
 
         // Verifies the expected behavior for this test scenario.
@@ -41,33 +41,33 @@ public class UrlNormalizerTests
     public void TryNormalize_AcceptsWwwAliasAndCanonicalizesToSeedHost()
     {
         // Creates the object needed for the next step of the workflow.
-        var baseUri = new Uri("https://oyakdijital.com.tr");
+        var baseUri = new Uri("https://tenantdemo.example");
         // Creates the object needed for the next step of the workflow.
-        var sourceUri = new Uri("https://www.oyakdijital.com.tr/cozumler");
+        var sourceUri = new Uri("https://www.tenantdemo.example/cozumler");
         var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "/cozumler//kurumsal-uygulama/?x=1#top", out var normalized);
 
         // Verifies the expected behavior for this test scenario.
         Assert.True(ok);
         // Verifies the expected behavior for this test scenario.
-        Assert.Equal("https://oyakdijital.com.tr/cozumler/kurumsal-uygulama", normalized);
+        Assert.Equal("https://tenantdemo.example/cozumler/kurumsal-uygulama", normalized);
     }
 
     [Fact]
     public void TryNormalize_AcceptsSubdomainsInsideSourceDomain()
     {
-        var baseUri = new Uri("https://www.generic-tenant.org.tr");
-        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
-        var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "https://bagis.generic-tenant.org.tr/tr/", out var normalized);
+        var baseUri = new Uri("https://www.charity.example");
+        var sourceUri = new Uri("https://www.charity.example");
+        var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "https://donate.charity.example/tr/", out var normalized);
 
         Assert.True(ok);
-        Assert.Equal("https://bagis.generic-tenant.org.tr/tr", normalized);
+        Assert.Equal("https://donate.charity.example/tr", normalized);
     }
 
     [Fact]
     public void TryNormalize_RejectsDifferentDomainsEvenWhenTheyAreLinkedBySource()
     {
-        var baseUri = new Uri("https://www.generic-tenant.org.tr");
-        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
+        var baseUri = new Uri("https://www.charity.example");
+        var sourceUri = new Uri("https://www.charity.example");
         var ok = UrlNormalizer.TryNormalize(baseUri, sourceUri, "https://kanver.org", out var normalized);
 
         Assert.False(ok);
@@ -77,12 +77,12 @@ public class UrlNormalizerTests
     [Fact]
     public void TryNormalize_CanDisableSubdomainDiscovery()
     {
-        var baseUri = new Uri("https://www.generic-tenant.org.tr");
-        var sourceUri = new Uri("https://www.generic-tenant.org.tr");
+        var baseUri = new Uri("https://www.charity.example");
+        var sourceUri = new Uri("https://www.charity.example");
         var ok = UrlNormalizer.TryNormalize(
             baseUri,
             sourceUri,
-            "https://bagis.generic-tenant.org.tr/tr/",
+            "https://donate.charity.example/tr/",
             out var normalized,
             includeSubdomains: false);
 
@@ -95,7 +95,7 @@ public class UrlNormalizerTests
     public void TryNormalize_RejectsStaticAssetsByDefault()
     {
         // Creates the object needed for the next step of the workflow.
-        var baseUri = new Uri("https://oyakdijital.com.tr");
+        var baseUri = new Uri("https://tenantdemo.example");
         var ok = UrlNormalizer.TryNormalize(baseUri, "/_next/static/app.js", out var normalized);
 
         // Verifies the expected behavior for this test scenario.

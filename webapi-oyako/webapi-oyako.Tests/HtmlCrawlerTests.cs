@@ -25,29 +25,29 @@ public class HtmlCrawlerTests
         // Creates the object needed for the next step of the workflow.
         var responses = new Dictionary<string, Func<HttpResponseMessage>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["https://oyakdijital.com.tr/"] = () => Html("""
+            ["https://tenantdemo.example/"] = () => Html("""
                 <html>
                     <head><title>Tarayıcı Başlığı</title></head>
                     <body>
                         <h2>Kullanıcı Dostu Sayfa Başlığı</h2>
                         Ana sayfa iceriği
                         <a href="/cozumler//kurumsal-uygulama/">Kurumsal</a>
-                        <a href="https://oyakdijital.com.tr/engellenen">Engellenen</a>
+                        <a href="https://tenantdemo.example/engellenen">Engellenen</a>
                         <script>{"href":"/script-icinden-gelen"}</script>
                     </body>
                 </html>
                 """),
-            ["https://oyakdijital.com.tr/robots.txt"] = () => Text("Sitemap: https://www.oyakdijital.com.tr/sitemap.xml"),
-            ["https://oyakdijital.com.tr/sitemap.xml"] = () => Xml("""
+            ["https://tenantdemo.example/robots.txt"] = () => Text("Sitemap: https://www.tenantdemo.example/sitemap.xml"),
+            ["https://tenantdemo.example/sitemap.xml"] = () => Xml("""
                 <urlset>
-                    <url><loc>https://www.oyakdijital.com.tr/sitemap-icinden-gelen</loc></url>
+                    <url><loc>https://www.tenantdemo.example/sitemap-icinden-gelen</loc></url>
                 </urlset>
                 """),
-            ["https://oyakdijital.com.tr/cozumler/kurumsal-uygulama"] = () => Html("<html><body>Kurumsal uygulama sayfa metni</body></html>"),
-            ["https://oyakdijital.com.tr/script-icinden-gelen"] = () => Html("<html><body>Script icinden kesfedilen sayfa metni</body></html>"),
-            ["https://oyakdijital.com.tr/sitemap-icinden-gelen"] = () => Html("<html><body>Sitemap icinden kesfedilen sayfa metni</body></html>"),
+            ["https://tenantdemo.example/cozumler/kurumsal-uygulama"] = () => Html("<html><body>Kurumsal uygulama sayfa metni</body></html>"),
+            ["https://tenantdemo.example/script-icinden-gelen"] = () => Html("<html><body>Script icinden kesfedilen sayfa metni</body></html>"),
+            ["https://tenantdemo.example/sitemap-icinden-gelen"] = () => Html("<html><body>Sitemap icinden kesfedilen sayfa metni</body></html>"),
             // Creates the object needed for the next step of the workflow.
-            ["https://oyakdijital.com.tr/engellenen"] = () => new HttpResponseMessage((HttpStatusCode)418)
+            ["https://tenantdemo.example/engellenen"] = () => new HttpResponseMessage((HttpStatusCode)418)
         };
 
         // Creates a disposable resource scoped to this operation.
@@ -58,7 +58,7 @@ public class HtmlCrawlerTests
             // Creates the object needed for the next step of the workflow.
             Options.Create(new CrawlerOptions
             {
-                SeedUrl = "https://oyakdijital.com.tr",
+                SeedUrl = "https://tenantdemo.example",
                 MaxPagesToCrawl = 10,
                 MaxDepth = 4,
                 MinimumTextLengthToStore = 5,
@@ -72,24 +72,24 @@ public class HtmlCrawlerTests
             // Creates the repository stub required by the multi-source crawler workflow.
             new KnowledgeFileParser(),
             // Creates the repository stub required by the multi-source crawler workflow.
-            new StubWebPageRepository(CreateSource("https://oyakdijital.com.tr", "Oyak Dijital")));
+            new StubWebPageRepository(CreateSource("https://tenantdemo.example", "Tenant Demo")));
 
         var result = await crawler.CrawlAsync(CancellationToken.None);
 
         // Verifies the expected behavior for this test scenario.
         Assert.True(result.IsSuccessful, string.Join(" | ", result.Errors.Concat(result.Warnings)));
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/");
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/" && page.WebTitle == "Kullanıcı Dostu Sayfa Başlığı");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/" && page.WebTitle == "Kullanıcı Dostu Sayfa Başlığı");
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/cozumler/kurumsal-uygulama");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/cozumler/kurumsal-uygulama");
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/script-icinden-gelen");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/script-icinden-gelen");
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/sitemap-icinden-gelen");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/sitemap-icinden-gelen");
         // Verifies the expected behavior for this test scenario.
-        Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl == "https://oyakdijital.com.tr/engellenen");
+        Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl == "https://tenantdemo.example/engellenen");
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain(result.Errors, error => error.Contains("HTTP 418", StringComparison.Ordinal));
         // Verifies the expected behavior for this test scenario.
@@ -195,22 +195,22 @@ public class HtmlCrawlerTests
     {
         var responses = new Dictionary<string, Func<HttpResponseMessage>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["https://generic-tenant.org.tr/"] = () => Html("""
+            ["https://charity.example/"] = () => Html("""
                 <html><body>
-                    generic-tenant ana sayfa metni.
-                    <a href="https://bagis.generic-tenant.org.tr/tr">Bagis</a>
+                    Charity ana sayfa metni.
+                    <a href="https://donate.charity.example/tr">Bagis</a>
                     <a href="https://kanver.org">Dis domain</a>
                 </body></html>
                 """),
-            ["https://generic-tenant.org.tr/sitemap.xml"] = () => new HttpResponseMessage(HttpStatusCode.NotFound),
-            ["https://bagis.generic-tenant.org.tr/tr"] = () => Html("<html><body>generic-tenant bagis yontemleri online sms banka 168 ptt sube.</body></html>")
+            ["https://charity.example/sitemap.xml"] = () => new HttpResponseMessage(HttpStatusCode.NotFound),
+            ["https://donate.charity.example/tr"] = () => Html("<html><body>Charity bagis yontemleri online sms banka 168 ptt sube.</body></html>")
         };
         using var httpClient = new HttpClient(new StubHttpHandler(responses));
         var crawler = new HtmlCrawler(
             httpClient,
             Options.Create(new CrawlerOptions
             {
-                SeedUrl = "https://www.generic-tenant.org.tr",
+                SeedUrl = "https://www.charity.example",
                 MaxPagesToCrawl = 10,
                 MaxDepth = 2,
                 MinimumTextLengthToStore = 5,
@@ -226,17 +226,17 @@ public class HtmlCrawlerTests
             new KnowledgeSource
             {
                 Id = 1,
-                Name = "generic-tenant",
+                Name = "Charity",
                 SourceType = KnowledgeSourceTypes.WebSite,
-                Address = "https://www.generic-tenant.org.tr",
+                Address = "https://www.charity.example",
                 Protocol = "https",
                 IsEnabled = true
             },
             CancellationToken.None);
 
         Assert.True(result.IsSuccessful, string.Join(" | ", result.Errors.Concat(result.Warnings)));
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://generic-tenant.org.tr/");
-        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://bagis.generic-tenant.org.tr/tr");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://charity.example/");
+        Assert.Contains(result.Pages, page => page.WebSourceUrl == "https://donate.charity.example/tr");
         Assert.DoesNotContain(result.Pages, page => page.WebSourceUrl.Contains("kanver.org", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -399,7 +399,7 @@ public class HtmlCrawlerTests
             new WebPage
             {
                 SourceId = 1,
-                SourceName = "Oyak Dijital",
+                SourceName = "Tenant Demo",
                 SourceType = KnowledgeSourceTypes.WebSite,
                 WebSourceUrl = "https://example.com/rendered-page.html",
                 WebTitle = "Existing Title"

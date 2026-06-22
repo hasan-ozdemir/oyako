@@ -21,8 +21,8 @@ public class ChatPromptBuilderTests
             // Creates the object needed for the next step of the workflow.
             new WebPage
             {
-                WebSourceUrl = "https://www.oyakdijital.com.tr/cozumler",
-                WebContent = "Oyak Dijital kurumsal uygulama ve yapay zeka çözümleri sunar."
+                WebSourceUrl = "https://www.tenantdemo.example/cozumler",
+                WebContent = "Tenant Demo kurumsal uygulama ve yapay zeka çözümleri sunar."
             }
         });
         // Creates the object needed for the next step of the workflow.
@@ -39,7 +39,7 @@ public class ChatPromptBuilderTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("Test Asistan adlı tenant kapsamlı bir soru-cevap asistanıdır", prompt);
         Assert.Contains("etkin kaynak ve belge içeriklerindeki bilgileri cevapla", prompt);
-        Assert.DoesNotContain("kullanıcı Oyak Dijital hakkında soru sorduğunda", prompt);
+        Assert.DoesNotContain("kullanıcı Tenant Demo hakkında soru sorduğunda", prompt);
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("cevabın henüz burada bulunmadığını", prompt);
         // Verifies the expected behavior for this test scenario.
@@ -61,9 +61,9 @@ public class ChatPromptBuilderTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("cevap gövdesi, kaynak görünürlüğü açıksa tek 'Kaynak: ...' satırı", prompt);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("[CitationLabel] Oyak Dijital - Oyak Dijital", prompt);
+        Assert.Contains("[CitationLabel] Tenant Demo - Tenant Demo", prompt);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("[DocumentUrl] https://www.oyakdijital.com.tr/cozumler", prompt);
+        Assert.Contains("[DocumentUrl] https://www.tenantdemo.example/cozumler", prompt);
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("kurumsal uygulama ve yapay zeka", prompt);
     }
@@ -138,21 +138,21 @@ public class ChatPromptBuilderTests
             {
                 DocumentId = index + 1,
                 SourceId = 1,
-                SourceName = "Oyak Dijital",
+                SourceName = "Tenant Demo",
                 SourceType = "web_site",
-                DocumentTitle = string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!,
+                DocumentTitle = string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!,
                 DocumentUrl = page.WebSourceUrl,
-                DocumentCitationLabel = $"Oyak Dijital - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!)}",
+                DocumentCitationLabel = $"Tenant Demo - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!)}",
                 ContentHash = string.IsNullOrWhiteSpace(page.ContentHash) ? page.WebContent : page.ContentHash,
                 PromptBlock = $"""
                 [Knowledge Document]
                 [DocumentId] {index + 1}
                 [SourceId] 1
-                [SourceName] Oyak Dijital
+                [SourceName] Tenant Demo
                 [SourceType] web_site
-                [DocumentTitle] {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!)}
+                [DocumentTitle] {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!)}
                 [DocumentUrl] {page.WebSourceUrl}
-                [CitationLabel] Oyak Dijital - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!)}
+                [CitationLabel] Tenant Demo - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!)}
                 [Content]
                 {page.WebContent}
                 [/Content]

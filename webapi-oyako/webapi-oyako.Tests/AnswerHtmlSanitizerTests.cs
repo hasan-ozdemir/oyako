@@ -15,13 +15,13 @@ public class AnswerHtmlSanitizerTests
         // Creates the object needed for the next step of the workflow.
         var sanitizer = new AnswerHtmlSanitizer(new AnswerActionLinkifier());
         var markdown = """
-            Oyak Dijital hizmetleri.
+            Tenant Demo hizmetleri.
 
             <script>alert(1)</script>
             <a href="javascript:alert(1)">kötü link</a>
 
             ## Önerilen sorular
-            - Oyak Dijital hangi hizmetleri sunar?
+            - Tenant Demo hangi hizmetleri sunar?
             """;
 
         var result = sanitizer.RenderAssistantMarkdown(markdown);
@@ -35,9 +35,9 @@ public class AnswerHtmlSanitizerTests
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain("data-oyako-question", result.AnswerContent, StringComparison.OrdinalIgnoreCase);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("Oyak Dijital hizmetleri.", result.AnswerContent);
+        Assert.Contains("Tenant Demo hizmetleri.", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("Oyak Dijital hangi hizmetleri sunar?", result.SuggestedQuestions);
+        Assert.Contains("Tenant Demo hangi hizmetleri sunar?", result.SuggestedQuestions);
     }
 
     [Fact]
@@ -64,26 +64,26 @@ public class AnswerHtmlSanitizerTests
         var markdown = """
             İletişim bilgileri:
 
-            - E-posta: iletisim@oyakdijital.com.tr
-            - Alternatif e-posta: bilgi [at] oyakdijital [dot] com [dot] tr
+            - E-posta: iletisim@tenantdemo.com
+            - Alternatif e-posta: bilgi@tenantdemo.com
             - Telefon: 0 (312) 444 15 52
             - SMS: 0532 111 22 33
             - WhatsApp: 0532 111 22 33
-            - Web: oyakdijital.com.tr/iletisim
+            - Web: tenantdemo.com/iletisim
             - **Adres (İstanbul):** YTÜ Yıldız Teknopark, Maslak Mah. Taşyoncası Sk. Maslak 1453 Yerleşkesi No: 1 G İç Kapı No: B1 Kat:1 34398 Sarıyer / İSTANBUL
             - Konum: 41.107, 29.019
             - LinkedIn: https://www.linkedin.com/company/oyak-dijital
 
             ## Önerilen sorular
-            - OYAK Dijital'e nasıl ulaşabilirim?
+            - Tenant Demo'e nasıl ulaşabilirim?
             """;
 
         var result = sanitizer.RenderAssistantMarkdown(markdown);
 
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("href=\"mailto:iletisim@oyakdijital.com.tr\"", result.AnswerContent);
+        Assert.Contains("href=\"mailto:iletisim@tenantdemo.com\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("href=\"mailto:bilgi@oyakdijital.com.tr\"", result.AnswerContent);
+        Assert.Contains("href=\"mailto:bilgi@tenantdemo.com\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("href=\"tel:+903124441552\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
@@ -91,7 +91,7 @@ public class AnswerHtmlSanitizerTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("href=\"https://wa.me/905321112233\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("href=\"https://oyakdijital.com.tr/iletisim\"", result.AnswerContent);
+        Assert.Contains("href=\"https://tenantdemo.com/iletisim\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("href=\"https://www.google.com/maps/search/?api=1&amp;query=YT%C3%9C%20Y%C4%B1ld%C4%B1z%20Teknopark", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
@@ -105,7 +105,7 @@ public class AnswerHtmlSanitizerTests
         // Verifies the expected behavior for this test scenario.
         Assert.Contains("rel=\"noopener noreferrer\"", result.AnswerContent);
         // Verifies the expected behavior for this test scenario.
-        Assert.Contains("OYAK Dijital'e nasıl ulaşabilirim?", result.SuggestedQuestions);
+        Assert.Contains("Tenant Demo'e nasıl ulaşabilirim?", result.SuggestedQuestions);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class AnswerHtmlSanitizerTests
         var sanitizer = new AnswerHtmlSanitizer(new AnswerActionLinkifier());
         var markdown = """
             - **Adres (İstanbul):** YTÜ Yıldız Teknopark, Maslak Mah. Taşyoncası Sk. Maslak 1453 Yerleşkesi No: 1 G İç Kapı No: B1 Kat:1 34398 Sarıyer / İSTANBUL
-            - E-posta: iletisim@oyakdijital.com.tr
+            - E-posta: iletisim@tenantdemo.com
             """;
 
         var streamingResult = sanitizer.RenderAssistantMarkdown(markdown, enableActionLinks: false);
@@ -139,7 +139,7 @@ public class AnswerHtmlSanitizerTests
         // Creates the object needed for the next step of the workflow.
         var sanitizer = new AnswerHtmlSanitizer(new AnswerActionLinkifier());
         var markdown = """
-            [Oyak Dijital](https://oyakdijital.com.tr) bağlantısı korunur.
+            [Tenant Demo](https://tenantdemo.com) bağlantısı korunur.
 
             <a href="javascript:alert(1)">zararlı link</a>
             """;
@@ -147,7 +147,7 @@ public class AnswerHtmlSanitizerTests
         var result = sanitizer.RenderAssistantMarkdown(markdown);
 
         // Verifies the expected behavior for this test scenario.
-        Assert.Equal(1, CountOccurrences(result.AnswerContent, "href=\"https://oyakdijital.com.tr\""));
+        Assert.Equal(1, CountOccurrences(result.AnswerContent, "href=\"https://tenantdemo.com\""));
         // Verifies the expected behavior for this test scenario.
         Assert.DoesNotContain("javascript:", result.AnswerContent, StringComparison.OrdinalIgnoreCase);
     }

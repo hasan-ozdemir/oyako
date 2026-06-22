@@ -17,7 +17,7 @@ public class KnowledgeActivationSwitchServiceTests
     {
         var repository = new SwitchRepository
         {
-            Source = new KnowledgeSource { Id = 10, Name = "Oyak Dijital", IsEnabled = true, IsArchived = false }
+            Source = new KnowledgeSource { Id = 10, Name = "Tenant Demo", IsEnabled = true, IsArchived = false }
         };
         var cache = new CountingSystemInstructionCache();
         var service = new KnowledgeActivationSwitchService(repository, cache);

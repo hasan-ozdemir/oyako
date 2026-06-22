@@ -63,7 +63,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "knowledge_sources"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal("https://oyakdijital.com.tr", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
+            Assert.Equal("https://tenantdemo.example", await FirstTextAsync(database.ConnectionString, "knowledge_sources", "address"));
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "ai_settings"));
             // Verifies the expected behavior for this test scenario.
@@ -159,7 +159,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             var questions = await repository.GetNextAsync(4, CancellationToken.None);
 
             Assert.Single(questions);
-            Assert.Equal("Oyak Dijital hangi hizmetleri sunar?", questions[0].Text);
+            Assert.Equal("Tenant Demo hangi hizmetleri sunar?", questions[0].Text);
             Assert.Single(questions[0].DocumentReferences);
             Assert.True(questions[0].DocumentReferences[0].SourceId > 0);
             Assert.True(questions[0].DocumentReferences[0].DocumentId > 0);
@@ -292,7 +292,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "web_pages"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal("https://oyakdijital.com.tr/yeni", await FirstTextAsync(database.ConnectionString, "web_pages", "web_source_url"));
+            Assert.Equal("https://tenantdemo.example/yeni", await FirstTextAsync(database.ConnectionString, "web_pages", "web_source_url"));
         }
         finally
         {
@@ -337,7 +337,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(1, await CountAsync(database.ConnectionString, "web_pages"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal(1, await CountWhereAsync(database.ConnectionString, "knowledge_sources", "address", "https://oyakdijital.com.tr"));
+            Assert.Equal(1, await CountWhereAsync(database.ConnectionString, "knowledge_sources", "address", "https://tenantdemo.example"));
             // Verifies the expected behavior for this test scenario.
             Assert.Equal(0, await DuplicateCountAsync(database.ConnectionString, "web_pages", "web_source_url"));
             // Verifies the expected behavior for this test scenario.
@@ -345,7 +345,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Verifies the expected behavior for this test scenario.
             Assert.Equal("İkinci duplicate belge icerigi.", await FirstTextAsync(database.ConnectionString, "web_pages", "web_content"));
             // Verifies the expected behavior for this test scenario.
-            Assert.Equal("https://oyakdijital.com.tr/duplicate", await FirstTextAsync(database.ConnectionString, "web_pages", "web_source_url"));
+            Assert.Equal("https://tenantdemo.example/duplicate", await FirstTextAsync(database.ConnectionString, "web_pages", "web_source_url"));
         }
         finally
         {
@@ -448,14 +448,14 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             var changed = await repository.UpdateDocumentAsync(
                 document.Id,
                 "Editable",
-                "Yeni manuel belge icerigi OYAK Dijital hizmetleri icin kullanilir.",
+                "Yeni manuel belge icerigi Tenant Demo hizmetleri icin kullanilir.",
                 true,
                 CancellationToken.None);
 
             var usablePage = (await repository.GetAllPagesAsync(CancellationToken.None)).Single();
 
             Assert.True(changed);
-            Assert.Equal("Yeni manuel belge icerigi OYAK Dijital hizmetleri icin kullanilir.", usablePage.WebContent);
+            Assert.Equal("Yeni manuel belge icerigi Tenant Demo hizmetleri icin kullanilir.", usablePage.WebContent);
             Assert.Contains("Yeni manuel belge", usablePage.ContentPreview, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("manual", usablePage.PreviewStatus);
             Assert.Equal("ok", usablePage.StatusCode);
@@ -497,19 +497,19 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
     {
         Id = "013dfb35-0ed6-4e32-4a80-5eae86646ddf",
         OrderNumber = 1,
-        Name = "oyakdijital",
-        DisplayName = "Oyak Dijital",
+        Name = "tenantdemo",
+        DisplayName = "Tenant Demo",
         AzureDomainName = "oyako",
-        WebUrl = "https://www.oyakdijital.com.tr",
-        AdminEmail = "admin@oyakdijital.com.tr",
-        FeedbackEmail = "iletisim@oyakdijital.com.tr",
-        UiWebBrandName = "Oyak Dijital",
+        WebUrl = "https://www.tenantdemo.example",
+        AdminEmail = "admin@tenantdemo.example",
+        FeedbackEmail = "iletisim@tenantdemo.example",
+        UiWebBrandName = "Tenant Demo",
         UiWebAssistantName = "Oyako",
-        UiWebTitle = "Oyako: Oyak Dijital Soru-Cevap Platformu",
-        UiWebHeaderTitle = "Oyak Dijital soru-cevap platformu",
-        UiWebBrandLogoUrl = "https://www.oyakdijital.com.tr/logo.svg",
+        UiWebTitle = "Oyako: Tenant Demo Soru-Cevap Platformu",
+        UiWebHeaderTitle = "Tenant Demo soru-cevap platformu",
+        UiWebBrandLogoUrl = "https://www.tenantdemo.example/logo.svg",
         UiWebAssistantWelcomeMessage = "Merhaba, ben Oyako.",
-        UiWebAssistantHeaderTitle = "Oyak Dijital hakkında sorun:",
+        UiWebAssistantHeaderTitle = "Tenant Demo hakkında sorun:",
         UiWebKnowledgeBankHeaderTitle = "Bilgi Bankası",
         UiWebKnowledgeSourceHeaderTitle = "Bilgi Kaynakları",
         UiWebKnowledgeSourceHeaderMessage = "Aşağıda {sourceCount} kaynak ve {documentCount} belge var.",
@@ -521,7 +521,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             {
                 Key = "source_1",
                 Type = "web_site",
-                Url = "https://www.oyakdijital.com.tr",
+                Url = "https://www.tenantdemo.example",
                 RefreshPeriod = "1hour"
             }
         ]
@@ -551,9 +551,9 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
                 last_crawled_at_utc)
             VALUES (
                 (SELECT id FROM knowledge_sources LIMIT 1),
-                'https://www.oyakdijital.com.tr',
-                'Oyak Dijital',
-                'Oyak Dijital kaynak icerigi.',
+                'https://www.tenantdemo.example',
+                'Tenant Demo',
+                'Tenant Demo kaynak icerigi.',
                 'hash-1',
                 $timestamp,
                 $timestamp,
@@ -593,7 +593,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
                 last_served_at_utc,
                 created_at_utc)
             VALUES (
-                'Oyak Dijital hangi hizmetleri sunar?',
+                'Tenant Demo hangi hizmetleri sunar?',
                 'fingerprint',
                 0,
                 NULL,
@@ -612,8 +612,8 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
                 created_at_utc)
             VALUES (
                 (SELECT id FROM ready_questions ORDER BY id DESC LIMIT 1),
-                (SELECT source_id FROM web_pages WHERE web_source_url = 'https://www.oyakdijital.com.tr'),
-                (SELECT id FROM web_pages WHERE web_source_url = 'https://www.oyakdijital.com.tr'),
+                (SELECT source_id FROM web_pages WHERE web_source_url = 'https://www.tenantdemo.example'),
+                (SELECT id FROM web_pages WHERE web_source_url = 'https://www.tenantdemo.example'),
                 'hash-1',
                 $timestamp);
             """,
@@ -770,7 +770,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
                 // Creates the object needed for the next step of the workflow.
                 new WebPage
                 {
-                    WebSourceUrl = "https://www.oyakdijital.com.tr/duplicate/",
+                    WebSourceUrl = "https://www.tenantdemo.example/duplicate/",
                     WebTitle = "Duplicate",
                     WebContent = "İlk duplicate belge icerigi.",
                     ContentPreview = "İlk duplicate belge icerigi.",
@@ -782,7 +782,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
                 // Creates the object needed for the next step of the workflow.
                 new WebPage
                 {
-                    WebSourceUrl = "https://oyakdijital.com.tr/duplicate",
+                    WebSourceUrl = "https://tenantdemo.example/duplicate",
                     WebTitle = "Duplicate",
                     WebContent = "İkinci duplicate belge icerigi.",
                     ContentPreview = "İkinci duplicate belge icerigi.",
@@ -821,7 +821,7 @@ public sealed class KnowledgeStoreMaintenanceRepositoryTests
             // Creates the object needed for the next step of the workflow.
             var page = new WebPage
             {
-                WebSourceUrl = "https://www.oyakdijital.com.tr/yeni",
+                WebSourceUrl = "https://www.tenantdemo.example/yeni",
                 WebTitle = "Yeni Sayfa",
                 WebContent = "Yeni ama restore edilmesi gereken test icerigi.",
                 ContentHash = "new-hash"

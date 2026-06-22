@@ -21,7 +21,7 @@ public class SystemInstructionCacheTests
         // Creates the object needed for the next step of the workflow.
         var pageRepository = new MutableWebPageRepository(new[]
         {
-            CreatePage("https://www.oyakdijital.com.tr", "hash-1")
+            CreatePage("https://www.tenantdemo.example", "hash-1")
         });
         // Creates the object needed for the next step of the workflow.
         var cacheRepository = new StubSystemInstructionCacheRepository(new SystemInstructionCacheEntry
@@ -55,7 +55,7 @@ public class SystemInstructionCacheTests
         // Creates the object needed for the next step of the workflow.
         var pageRepository = new MutableWebPageRepository(new[]
         {
-            CreatePage("https://www.oyakdijital.com.tr", "hash-1")
+            CreatePage("https://www.tenantdemo.example", "hash-1")
         });
         // Creates the object needed for the next step of the workflow.
         var cacheRepository = new StubSystemInstructionCacheRepository(null);
@@ -74,7 +74,7 @@ public class SystemInstructionCacheTests
 
         pageRepository.SetPages(new[]
         {
-            CreatePage("https://www.oyakdijital.com.tr", "hash-2")
+            CreatePage("https://www.tenantdemo.example", "hash-2")
         });
 
         // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
@@ -96,8 +96,8 @@ public class SystemInstructionCacheTests
         return new WebPage
         {
             WebSourceUrl = url,
-            WebTitle = "Oyak Dijital",
-            WebContent = "Oyak Dijital hizmetleri hakkinda kaynak icerik.",
+            WebTitle = "Tenant Demo",
+            WebContent = "Tenant Demo hizmetleri hakkinda kaynak icerik.",
             ContentHash = contentHash,
             LastCrawledAtUtc = DateTime.UtcNow
         };
@@ -188,11 +188,11 @@ public class SystemInstructionCacheTests
             {
                 DocumentId = index + 1,
                 SourceId = 1,
-                SourceName = "Oyak Dijital",
+                SourceName = "Tenant Demo",
                 SourceType = "web_site",
-                DocumentTitle = string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!,
+                DocumentTitle = string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!,
                 DocumentUrl = page.WebSourceUrl,
-                DocumentCitationLabel = $"Oyak Dijital - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Oyak Dijital" : page.WebTitle!)}",
+                DocumentCitationLabel = $"Tenant Demo - {(string.IsNullOrWhiteSpace(page.WebTitle) ? "Tenant Demo" : page.WebTitle!)}",
                 ContentHash = page.ContentHash,
                 PromptBlock = page.WebContent,
                 UpdatedAtUtc = page.LastCrawledAtUtc
