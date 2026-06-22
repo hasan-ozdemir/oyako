@@ -626,7 +626,7 @@ function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$
     $last = ""
     do {
         try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $RequestTimeoutSeconds
             $snippet = (($response.Content -replace "\s+", " ").Trim())
             if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
             if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
@@ -695,7 +695,7 @@ function Wait-TenantConfigSmoke([string]$Name, [string]$Url, [string]$ExpectedTe
     $last = ""
     do {
         try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $RequestTimeoutSeconds
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
             $snippet = (($response.Content -replace "\s+", " ").Trim())
             if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
             if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
