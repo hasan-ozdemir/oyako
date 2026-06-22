@@ -120,6 +120,8 @@ Required GitHub Secrets:
 
 The workflow materializes these ignored files on the runner, runs `deploy-awa.cmd` without tenant arguments, and relies on `oyako.env` to resolve `oyakdijital`. After the deploy script's own smoke tests pass, the workflow passively waits for the startup crawler/refresh worker to make knowledge available by polling `/api/knowledge-health` and checking `/api/ready-questions`. It does not call `POST /api/knowledge-source-refresh`, so the release does not duplicate the startup crawl. The optional streamed Q&A probe is disabled by default and can be enabled for manual `workflow_dispatch`.
 
+Crawler timing is configured once in tracked `oyako.env` and copied into both AWA App Settings and ACA environment variables during deployment. The current release defaults use a 20 second HTTP/render budget, 0-100 ms request delay, and 1 second startup refresh jitter so slow first responses can still produce usable documents without lengthening successful release cycles unnecessarily.
+
 ## Tenant Brand Assets
 
 Tenant brand logo SVGs are served locally from `webapp-oyako/public/tenants/<tenant-name>/brand-logo.svg` so deployed pages do not depend on remote logo hotlinks. Verify trademark and brand usage approvals before public production rollout.

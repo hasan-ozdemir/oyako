@@ -260,6 +260,14 @@ function Assert-PositiveInt([string]$Value, [string]$Name) {
     return [string]$parsed
 }
 
+function Assert-NonNegativeInt([string]$Value, [string]$Name) {
+    $parsed = 0
+    if (-not [int]::TryParse($Value, [ref]$parsed) -or $parsed -lt 0) {
+        Fail "$Name must be a non-negative integer."
+    }
+    return [string]$parsed
+}
+
 function Expand-EnvReferences([hashtable]$Map) {
     $expanded = @{}
     foreach ($key in $Map.Keys) {
@@ -1084,6 +1092,15 @@ try {
     $crawlerDomainOnly = Assert-BoolValue (EnvValue $tenantEnv "domain_only_crawling" "true") "domain_only_crawling"
     $crawlerMaxPages = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_count" "1000") "web_document_max_count"
     $crawlerMaxDepth = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_depth" "10") "web_document_max_depth"
+    $crawlerRequestTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_request_timeout_seconds" "20") "web_document_request_timeout_seconds"
+    $crawlerRenderTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_render_timeout_seconds" "20") "web_document_render_timeout_seconds"
+    $crawlerRenderStabilizationTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_render_stabilization_timeout_seconds" "1") "web_document_render_stabilization_timeout_seconds"
+    $crawlerMinDelay = Assert-NonNegativeInt (EnvValue $globalConfig "web_document_minimum_request_delay_milliseconds" "0") "web_document_minimum_request_delay_milliseconds"
+    $crawlerMaxDelay = Assert-NonNegativeInt (EnvValue $globalConfig "web_document_maximum_request_delay_milliseconds" "100") "web_document_maximum_request_delay_milliseconds"
+    $crawlerStartupJitter = Assert-PositiveInt (EnvValue $globalConfig "web_document_source_refresh_startup_jitter_seconds" "1") "web_document_source_refresh_startup_jitter_seconds"
+    if ($crawlerMaxDelay -lt $crawlerMinDelay) {
+        Fail "web_document_maximum_request_delay_milliseconds must be greater than or equal to web_document_minimum_request_delay_milliseconds."
+    }
     $tenantAppSettings = @(
         "OYAKO_TENANT_NAME=$tenantName",
         "Tenant__Enabled=true",
@@ -1131,6 +1148,12 @@ try {
         "Crawler__IncludeSubdomains=true",
         "Crawler__MaxPagesToCrawl=$crawlerMaxPages",
         "Crawler__MaxDepth=$crawlerMaxDepth",
+        "Crawler__RequestTimeoutSeconds=$crawlerRequestTimeout",
+        "Crawler__RenderTimeoutSeconds=$crawlerRenderTimeout",
+        "Crawler__RenderStabilizationTimeoutSeconds=$crawlerRenderStabilizationTimeout",
+        "Crawler__MinimumRequestDelayMilliseconds=$crawlerMinDelay",
+        "Crawler__MaximumRequestDelayMilliseconds=$crawlerMaxDelay",
+        "Crawler__SourceRefreshStartupJitterSeconds=$crawlerStartupJitter",
         "AzureAi__Endpoint=$($azureEnv["AzureAi__Endpoint"])",
         "AzureAi__DeploymentName=$($tenantEnv["ai_provider_azure_cloud_model"])",
         "AzureAi__Deployments__0=$($tenantEnv["ai_provider_azure_cloud_model"])",

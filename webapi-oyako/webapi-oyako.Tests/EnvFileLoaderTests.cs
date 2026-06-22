@@ -86,6 +86,11 @@ public sealed class EnvFileLoaderTests
                 default_tenant_id=013dfb350ed64e324a805eae86646ddf
                 default_tenant_name=tenantdemo
                 azure_location=italynorth
+                web_document_request_timeout_seconds=20
+                web_document_render_timeout_seconds=20
+                web_document_minimum_request_delay_milliseconds=0
+                web_document_maximum_request_delay_milliseconds=100
+                web_document_source_refresh_startup_jitter_seconds=1
                 """);
 
             EnvFileLoader.LoadMany(["oyako.env"], tempRoot);
@@ -93,10 +98,23 @@ public sealed class EnvFileLoaderTests
             Assert.Equal("013dfb350ed64e324a805eae86646ddf", Environment.GetEnvironmentVariable("default_tenant_id"));
             Assert.Equal("tenantdemo", Environment.GetEnvironmentVariable("default_tenant_name"));
             Assert.Equal("italynorth", Environment.GetEnvironmentVariable("azure_location"));
+            Assert.Equal("20", Environment.GetEnvironmentVariable("Crawler__RequestTimeoutSeconds"));
+            Assert.Equal("20", Environment.GetEnvironmentVariable("Crawler__RenderTimeoutSeconds"));
+            Assert.Equal("0", Environment.GetEnvironmentVariable("Crawler__MinimumRequestDelayMilliseconds"));
+            Assert.Equal("100", Environment.GetEnvironmentVariable("Crawler__MaximumRequestDelayMilliseconds"));
+            Assert.Equal("1", Environment.GetEnvironmentVariable("Crawler__SourceRefreshStartupJitterSeconds"));
         }
         finally
         {
-            ClearEnvironment("default_tenant_id", "default_tenant_name", "azure_location");
+            ClearEnvironment(
+                "default_tenant_id",
+                "default_tenant_name",
+                "azure_location",
+                "Crawler__RequestTimeoutSeconds",
+                "Crawler__RenderTimeoutSeconds",
+                "Crawler__MinimumRequestDelayMilliseconds",
+                "Crawler__MaximumRequestDelayMilliseconds",
+                "Crawler__SourceRefreshStartupJitterSeconds");
             Directory.Delete(tempRoot, recursive: true);
         }
     }

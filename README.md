@@ -59,6 +59,8 @@ The Web App script publishes the ASP.NET API for Linux with the React SPA copied
 
 Pushing to `main` runs `.github/workflows/release-awa.yml`. The workflow logs into Azure with the `AZURE_CREDENTIALS` service-principal secret, recreates ignored env files from GitHub Secrets, runs `deploy-awa.cmd` for the default tenant, and then passively waits for startup knowledge readiness through `/api/knowledge-health` and `/api/ready-questions`. It does not explicitly trigger an extra crawler refresh.
 
+Crawler timing used by local runs and Azure deploy scripts is controlled by safe global keys in `oyako.env`, including `web_document_request_timeout_seconds`, `web_document_render_timeout_seconds`, request delay bounds, and startup refresh jitter. Tenant env files still own source URLs; `oyako.env` owns tenant-agnostic crawler behavior.
+
 Custom domain binding is optional in both deploy scripts. If DNS or Azure hostname binding is not ready, the script reports a warning and continues with the Azure-managed hostname.
 
 ## Secret Policy
