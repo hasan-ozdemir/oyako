@@ -918,6 +918,7 @@ export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Production}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://0.0.0.0:${PORT:-8080}}"
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/home/oyako-playwright/ms-playwright}"
 mkdir -p /home/oyako-data "${PLAYWRIGHT_BROWSERS_PATH}"
+PLAYWRIGHT_DEPS_MARKER="${PLAYWRIGHT_BROWSERS_PATH}/.oyako-deps-installed"
 
 if [ ! -f ./webapi-oyako.dll ]; then
   echo "[startup] ERROR: webapi-oyako.dll is missing from the deployed package."
@@ -935,10 +936,13 @@ if [ ! -f ./.playwright/node/linux-x64/node ]; then
 fi
 
 chmod +x ./.playwright/node/linux-x64/node
-if [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] && [ ! -e /lib/x86_64-linux-gnu/libnspr4.so ]; then
+if [ ! -f "${PLAYWRIGHT_DEPS_MARKER}" ] && [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] && [ ! -e /lib/x86_64-linux-gnu/libnspr4.so ]; then
   dotnet ./webapi-oyako.dll --install-playwright-deps
+  touch "${PLAYWRIGHT_DEPS_MARKER}"
 fi
-dotnet ./webapi-oyako.dll --install-playwright
+if ! compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux/chrome" > /dev/null; then
+  dotnet ./webapi-oyako.dll --install-playwright
+fi
 exec dotnet ./webapi-oyako.dll
 '@
     [IO.File]::WriteAllText(
@@ -1086,7 +1090,7 @@ try {
     if ($currentLinuxFxVersion -ne $LinuxFxVersion) {
         Fail "Web App runtime is '$currentLinuxFxVersion', expected '$LinuxFxVersion'. Recreate the script-owned Web App or update Azure CLI/runtime support before deploying."
     }
-    Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--always-on", "true", "--ftps-state", "Disabled", "--startup-file", "bash startup.sh")
+    Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--always-on", "true", "--ftps-state", "Disabled")
 
     $aiProvider = Normalize-AiProvider (EnvValue $tenantEnv "primary_ai_provider" "ollama-cloud") "primary_ai_provider"
     $aiFallbackProvider = Normalize-AiProvider (EnvValue $tenantEnv "secondary_ai_provider" "azure-cloud") "secondary_ai_provider"
@@ -1179,6 +1183,8 @@ try {
 
     Step "Deploying ZIP package"
     Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "false", "--track-status", "false", "--timeout", ([string]$DeployTimeoutMilliseconds))
+    Step "Applying App Service startup command"
+    Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--startup-file", "bash startup.sh")
     Az @("webapp", "restart", "--name", $WebAppName, "--resource-group", $ResourceGroup)
 
     $baseUrl = "https://$WebAppName.azurewebsites.net"
