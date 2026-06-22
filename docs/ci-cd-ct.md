@@ -169,7 +169,7 @@ The repository includes `.github/workflows/release-awa.yml` as the default live 
 Required release secrets:
 
 - `AZURE_CREDENTIALS`
-- `TENANT_OYAKDIJITAL_ENV`
+- Default tenant env secret, mapped by the release workflow.
 - `AZURE_CLOUD_ENV`
 - `OLLAMA_CLOUD_ENV`
 

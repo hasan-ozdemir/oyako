@@ -38,7 +38,7 @@ The scripts do not create Azure Storage Account, Static Web App, separate API Ap
 
 ## Tenant Naming and Lifecycle
 
-Tenant configuration is discovered by traversing `.tenants/*.env`. The real tenant `.env` files are ignored by Git; the only committed tenant template is `.tenants/.template.env.example`. If a script is run without `--tenant-name` or `-t`, it resolves the default tenant from committed, secrets-free `oyako.env` using `default_tenant_id`, then `default_tenant_name`, then the hard-coded final fallback `oyakdijital`.
+Tenant configuration is discovered by traversing `.tenants/*.env`. The real tenant `.env` files are ignored by Git; the only committed tenant template is `.tenants/.template.env.example`. If a script is run without `--tenant-name` or `-t`, it resolves the default tenant from committed, secrets-free `oyako.env` using `default_tenant_id`, then `default_tenant_name`, then the script's final product-default tenant fallback.
 
 Required tenant keys include:
 
@@ -114,11 +114,11 @@ Root provider `.env.example` files are intentionally not committed. Keep require
 Required GitHub Secrets:
 
 - `AZURE_CREDENTIALS`: service principal JSON for Azure login.
-- `TENANT_OYAKDIJITAL_ENV`: full ignored `.tenants/oyakdijital.env` content.
+- `TENANT_DEFAULT_ENV`: full ignored default tenant `.env` content; map it to the workflow's concrete secret name.
 - `AZURE_CLOUD_ENV`: full ignored `azure-cloud.env` content.
 - `OLLAMA_CLOUD_ENV`: full ignored `ollama-cloud.env` content.
 
-The workflow materializes these ignored files on the runner, runs `deploy-awa.cmd` without tenant arguments, and relies on `oyako.env` to resolve `oyakdijital`. After the deploy script's own smoke tests pass, the workflow passively waits for the startup crawler/refresh worker to make knowledge available by polling `/api/knowledge-health` and checking `/api/ready-questions`. It does not call `POST /api/knowledge-source-refresh`, so the release does not duplicate the startup crawl. The optional streamed Q&A probe is disabled by default and can be enabled for manual `workflow_dispatch`.
+The workflow materializes these ignored files on the runner, runs `deploy-awa.cmd` without tenant arguments, and relies on `oyako.env` to resolve the default tenant. After the deploy script's own smoke tests pass, the workflow passively waits for the startup crawler/refresh worker to make knowledge available by polling `/api/knowledge-health` and checking `/api/ready-questions`. It does not call `POST /api/knowledge-source-refresh`, so the release does not duplicate the startup crawl. The optional streamed Q&A probe is disabled by default and can be enabled for manual `workflow_dispatch`.
 
 Crawler timing is configured once in tracked `oyako.env` and copied into both AWA App Settings and ACA environment variables during deployment. The current release defaults use a 20 second HTTP/render budget, 0-100 ms request delay, and 1 second startup refresh jitter so slow first responses can still produce usable documents without lengthening successful release cycles unnecessarily.
 

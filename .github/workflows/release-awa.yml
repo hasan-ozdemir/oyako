@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release-default-tenant:
-    name: Deploy oyakdijital with deploy-awa.cmd
+    name: Deploy default tenant with deploy-awa.cmd
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -64,6 +64,7 @@ jobs:
           $config = Read-EnvFile $configPath
           "dotnet_version=$(EnvValue $config "ci_dotnet_version" "10.0.x")" >> $env:GITHUB_OUTPUT
           "node_version=$(EnvValue $config "ci_node_version" "24.x")" >> $env:GITHUB_OUTPUT
+          "default_tenant_name=$(EnvValue $config "default_tenant_name" "oyakdijital")" >> $env:GITHUB_OUTPUT
           "wait_knowledge=$(EnvValue $config "release_wait_for_startup_knowledge_ready" "true")" >> $env:GITHUB_OUTPUT
           "knowledge_timeout=$(EnvValue $config "release_knowledge_ready_timeout_seconds" "600")" >> $env:GITHUB_OUTPUT
           "knowledge_poll=$(EnvValue $config "release_knowledge_poll_seconds" "15")" >> $env:GITHUB_OUTPUT
@@ -84,7 +85,8 @@ jobs:
 
       - name: Materialize release environment files
         env:
-          TENANT_OYAKDIJITAL_ENV: ${{ secrets.TENANT_OYAKDIJITAL_ENV }}
+          DEFAULT_TENANT_NAME: ${{ steps.global_config.outputs.default_tenant_name }}
+          TENANT_DEFAULT_ENV: ${{ secrets.TENANT_DEFAULT_ENV || secrets.TENANT_OYAKDIJITAL_ENV }}
           AZURE_CLOUD_ENV: ${{ secrets.AZURE_CLOUD_ENV }}
           OLLAMA_CLOUD_ENV: ${{ secrets.OLLAMA_CLOUD_ENV }}
         run: |
@@ -93,8 +95,16 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
           $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          if ([string]::IsNullOrWhiteSpace($env:DEFAULT_TENANT_NAME)) {
+            throw "Default tenant name was not resolved from oyako.env."
+          }
+
+          if ($env:DEFAULT_TENANT_NAME -notmatch '^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$') {
+            throw "Default tenant name contains unsupported characters."
+          }
+
           $files = @{
-            ".tenants/oyakdijital.env" = $env:TENANT_OYAKDIJITAL_ENV
+            ".tenants/$($env:DEFAULT_TENANT_NAME).env" = $env:TENANT_DEFAULT_ENV
             "azure-cloud.env" = $env:AZURE_CLOUD_ENV
             "ollama-cloud.env" = $env:OLLAMA_CLOUD_ENV
           }
@@ -131,6 +141,7 @@ jobs:
           ACCEPT_READY_WITH_WARNINGS: ${{ steps.global_config.outputs.accept_ready_with_warnings }}
           GLOBAL_QNA_PROBE_ENABLED: ${{ steps.global_config.outputs.qna_probe }}
           MANUAL_QNA_PROBE_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs['qna-probe'] || 'false' }}
+          DEFAULT_TENANT_NAME: ${{ steps.global_config.outputs.default_tenant_name }}
         run: |
           $ErrorActionPreference = "Stop"
           $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -161,13 +172,17 @@ jobs:
             return Invoke-RestMethod -Uri $Uri -TimeoutSec $TimeoutSeconds
           }
 
-          $tenantEnvPath = Join-Path $PWD ".tenants/oyakdijital.env"
+          if ([string]::IsNullOrWhiteSpace($env:DEFAULT_TENANT_NAME)) {
+            throw "Default tenant name was not resolved from oyako.env."
+          }
+
+          $tenantEnvPath = Join-Path $PWD ".tenants/$($env:DEFAULT_TENANT_NAME).env"
           $tenantEnv = Read-EnvFile $tenantEnvPath
           $tenantName = Require-Key $tenantEnv "tenant_name" $tenantEnvPath
           $tenantId = Require-Key $tenantEnv "tenant_id" $tenantEnvPath
           $tenantSlug = Require-Key $tenantEnv "tenant_azure_domain_name" $tenantEnvPath
-          if ($tenantName -ne "oyakdijital") {
-            throw "Release tenant env must be oyakdijital, got '$tenantName'."
+          if ($tenantName -ne $env:DEFAULT_TENANT_NAME) {
+            throw "Release tenant env does not match the configured product-default tenant."
           }
 
           $timeoutSeconds = [Math]::Max(60, [int]$env:KNOWLEDGE_TIMEOUT_SECONDS)

@@ -17,7 +17,7 @@ Oyako is a Turkish full-stack question-answer platform for curated knowledge sou
 .\run-app.cmd
 ```
 
-The local script discovers tenants by traversing `.tenants/*.env`, resolves the default tenant from tracked `oyako.env`, requires `tenant_enabled=true`, starts the backend on ports `5000` and `5001`, starts the frontend on port `3000`, and opens the default browser when the frontend is ready. Use `.\run-app.cmd --tenant-name generictenant` to run another tenant locally.
+The local script discovers tenants by traversing `.tenants/*.env`, resolves the default tenant from tracked `oyako.env`, requires `tenant_enabled=true`, starts the backend on ports `5000` and `5001`, starts the frontend on port `3000`, and opens the default browser when the frontend is ready. Use `.\run-app.cmd --tenant-name <tenant-name>` to run a specific tenant locally.
 
 Tenant env files also seed the baseline website knowledge source for that tenant through `tenant_knowledge_source_1_type`, `tenant_knowledge_source_1_url`, and `tenant_knowledge_source_1_refresh_period`. Background refresh applies only to these env-managed seed website sources; admin-added sources and documents stay tenant-local and are preserved.
 
