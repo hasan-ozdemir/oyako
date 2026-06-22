@@ -36,7 +36,7 @@ if [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] || [ ! -e /usr/lib/x86_64-linu
   fi
 fi
 
-if ! compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux/chrome" > /dev/null; then
+if ! compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux64/chrome" > /dev/null; then
   if ! dotnet ./webapi-oyako.dll --install-playwright > "${PLAYWRIGHT_INSTALL_LOG}" 2>&1; then
     cat "${PLAYWRIGHT_INSTALL_LOG}"
     exit 94

@@ -915,7 +915,7 @@ function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
         Fail "Linux startup script was not found: $startupScriptPath"
     }
     $startupScript = [IO.File]::ReadAllText($startupScriptPath, [System.Text.UTF8Encoding]::new($false))
-    foreach ($requiredText in @("#!/usr/bin/env bash", "set -euo pipefail", "DEBIAN_FRONTEND=noninteractive", "--verify-playwright", "exec dotnet ./webapi-oyako.dll")) {
+    foreach ($requiredText in @("#!/usr/bin/env bash", "set -euo pipefail", "DEBIAN_FRONTEND=noninteractive", "chrome-linux64/chrome", "--verify-playwright", "exec dotnet ./webapi-oyako.dll")) {
         if ($startupScript -notmatch [regex]::Escape($requiredText)) {
             Fail "Linux startup script is missing required text: $requiredText"
         }
@@ -1160,7 +1160,7 @@ try {
     Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "false", "--track-status", "false", "--timeout", ([string]$DeployTimeoutMilliseconds))
     Step "Applying App Service startup command"
     Az @("webapp", "stop", "--name", $WebAppName, "--resource-group", $ResourceGroup)
-    Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--startup-file", "bash startup.sh")
+    Az @("webapp", "config", "set", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--startup-file", "bash /home/site/wwwroot/startup.sh")
     Start-Sleep -Seconds 10
     Az @("webapp", "start", "--name", $WebAppName, "--resource-group", $ResourceGroup)
 
