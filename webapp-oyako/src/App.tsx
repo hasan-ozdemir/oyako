@@ -2787,7 +2787,7 @@ function App() {
             role="link"
             aria-label={tenantConfig.uiWebBrandName}
           >
-            <img className="oyak-brand-logo" src={tenantConfig.uiWebBrandLogoUrl} alt={tenantConfig.uiWebBrandName} />
+            <img className="tenant-brand-logo" src={tenantConfig.uiWebBrandLogoUrl} alt={tenantConfig.uiWebBrandName} />
             <span className="oyak-brand-text" aria-hidden="true">{tenantConfig.uiWebBrandName}</span>
           </a>
 
@@ -3379,7 +3379,7 @@ function App() {
                   id="new-source-address"
                   value={newSourceAddress}
                   onChange={(event) => setNewSourceAddress(event.target.value)}
-                  placeholder="https://www.oyakdijital.com.tr"
+                  placeholder={tenantConfig.tenantWebUrl}
                   disabled={isKnowledgeMutationBusy}
                 />
               </label>
@@ -3525,7 +3525,7 @@ function App() {
                 id="web-document-url"
                 value={webDocumentLinkEditor.url}
                 onChange={(event) => setWebDocumentLinkEditor((current) => current ? { ...current, url: event.target.value } : current)}
-                placeholder="https://www.oyakdijital.com.tr/..."
+                placeholder={`${tenantConfig.tenantWebUrl.replace(/\/$/, '')}/...`}
                 disabled={isWebDocumentLinkSaving}
               />
             </label>

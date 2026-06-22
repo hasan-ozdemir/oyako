@@ -389,7 +389,7 @@ body.oyako-modal-open {
 }
 
 /* Explains the visual styling or responsive behavior for this UI selector. */
-.oyak-brand-logo {
+.tenant-brand-logo {
   width: clamp(30px, 3vw, 38px);
   height: clamp(30px, 3vw, 38px);
   flex: 0 0 auto;

@@ -5,8 +5,6 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/favicon.svg',
   '/icons/oyako-icon.svg',
-  '/tenants/oyakdijital/brand-logo.svg',
-  '/tenants/generictenant/brand-logo.svg',
 ]
 
 self.addEventListener('install', (event) => {
