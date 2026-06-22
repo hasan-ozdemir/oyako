@@ -81,7 +81,33 @@ if (isAzureWebAppRuntime)
     }
 
     Environment.SetEnvironmentVariable("PLAYWRIGHT_DRIVER_SEARCH_PATH", AppContext.BaseDirectory);
+    Environment.SetEnvironmentVariable("DEBIAN_FRONTEND", "noninteractive");
     Directory.CreateDirectory(browserPath);
+    if (!File.Exists("/usr/lib/x86_64-linux-gnu/libnspr4.so")
+        || !File.Exists("/usr/lib/x86_64-linux-gnu/libnss3.so")
+        || !File.Exists("/usr/lib/x86_64-linux-gnu/libgbm.so.1"))
+    {
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+        var depsExitCode = 0;
+        try
+        {
+            Console.SetOut(TextWriter.Null);
+            Console.SetError(TextWriter.Null);
+            depsExitCode = Microsoft.Playwright.Program.Main(["install-deps", "chromium"]);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetError(originalError);
+        }
+
+        if (depsExitCode != 0)
+        {
+            throw new InvalidOperationException($"Playwright Chromium dependency install failed with exit code {depsExitCode}.");
+        }
+    }
+
     var hasChromium = Directory.EnumerateFiles(browserPath, "chrome", SearchOption.AllDirectories)
         .Any(path => path.Replace('\\', '/').Contains("/chromium-", StringComparison.OrdinalIgnoreCase)
             && path.Replace('\\', '/').EndsWith("/chrome-linux64/chrome", StringComparison.OrdinalIgnoreCase));
