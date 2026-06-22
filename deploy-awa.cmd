@@ -792,7 +792,7 @@ function Remove-OwnedWebApp([string]$Name, [string]$Description = "non-compliant
     Assert-OwnedOrMissing $site $Name "Web App"
     if ($site) {
         Step "Removing $Description Web App $Name"
-        Az @("webapp", "delete", "--name", $site.name, "--resource-group", $site.resourceGroup)
+        Az @("webapp", "delete", "--name", $site.name, "--resource-group", $site.resourceGroup, "--keep-empty-plan")
         Wait-ResourceGone "Web App $Name" { [bool](Get-WebApp $Name) }
     }
 }
@@ -964,6 +964,10 @@ try {
     if ($deployHelp -notmatch "--src-path" -or $deployHelp -notmatch "--type" -or $deployHelp -notmatch "--clean" -or $deployHelp -notmatch "--timeout") {
         Fail "Azure CLI webapp deploy lacks required --src-path/--type/--clean/--timeout arguments."
     }
+    $deleteHelp = Run "az" @("webapp", "delete", "--help") -Quiet
+    if ($deleteHelp -notmatch "--keep-empty-plan") {
+        Fail "Azure CLI webapp delete lacks required --keep-empty-plan argument."
+    }
 
     Step "Ensuring resource group"
     $rg = TryAz @("group", "show", "--name", $ResourceGroup, "--query", "id", "-o", "tsv")
@@ -994,6 +998,7 @@ try {
     if ($site -and $RecreateWebApp) {
         Remove-OwnedWebApp $WebAppName "cutover"
         $site = $null
+        $plan = Get-Plan
     }
 
     if (-not $plan) {
