@@ -35,7 +35,7 @@ public sealed class PlaywrightPageRenderer : IPageRenderer, IAsyncDisposable
         {
             var timeout = BuildRenderTimeout();
             var deadline = DateTimeOffset.UtcNow.Add(timeout);
-            var context = await GetContextAsync();
+            var context = await GetContextAsync(deadline, cancellationToken);
             var page = await context.NewPageAsync();
             page.SetDefaultNavigationTimeout((float)timeout.TotalMilliseconds);
             page.SetDefaultTimeout((float)timeout.TotalMilliseconds);
@@ -103,7 +103,7 @@ public sealed class PlaywrightPageRenderer : IPageRenderer, IAsyncDisposable
     }
 
     // Executes this component behavior as part of the Oyako application flow.
-    private async Task<IBrowserContext> GetContextAsync()
+    private async Task<IBrowserContext> GetContextAsync(DateTimeOffset deadline, CancellationToken cancellationToken)
     {
         // Guards the following branch so the workflow handles this condition deliberately.
         if (_context is not null)
@@ -112,56 +112,69 @@ public sealed class PlaywrightPageRenderer : IPageRenderer, IAsyncDisposable
             return _context;
         }
 
-        _playwright = await Playwright.CreateAsync();
+        _playwright = await RunWithinRemainingAsync(
+            Playwright.CreateAsync,
+            deadline,
+            cancellationToken);
         // Creates the object needed for the next step of the workflow.
-        _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-        {
-            Headless = true,
-            Args = new[]
+        _browser = await RunWithinRemainingAsync(
+            () => _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {
-                "--disable-dev-shm-usage",
-                "--disable-background-networking",
-                "--disable-background-timer-throttling"
-            }
-        });
+                Headless = true,
+                Timeout = Math.Max(1, RemainingMilliseconds(deadline)),
+                Args = new[]
+                {
+                    "--disable-dev-shm-usage",
+                    "--disable-background-networking",
+                    "--disable-background-timer-throttling"
+                }
+            }),
+            deadline,
+            cancellationToken);
 
         // Creates the object needed for the next step of the workflow.
-        _context = await _browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            Locale = "tr-TR",
-            TimezoneId = "Europe/Istanbul",
-            UserAgent = _options.UserAgent,
-            // Creates the object needed for the next step of the workflow.
-            ViewportSize = new ViewportSize { Width = 1440, Height = 1000 },
-            // Creates the object needed for the next step of the workflow.
-            ExtraHTTPHeaders = new Dictionary<string, string>
+        _context = await RunWithinRemainingAsync(
+            () => _browser.NewContextAsync(new BrowserNewContextOptions
             {
-                ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                ["Accept-Language"] = "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-            },
-            ServiceWorkers = ServiceWorkerPolicy.Block
-        });
+                Locale = "tr-TR",
+                TimezoneId = "Europe/Istanbul",
+                UserAgent = _options.UserAgent,
+                // Creates the object needed for the next step of the workflow.
+                ViewportSize = new ViewportSize { Width = 1440, Height = 1000 },
+                // Creates the object needed for the next step of the workflow.
+                ExtraHTTPHeaders = new Dictionary<string, string>
+                {
+                    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    ["Accept-Language"] = "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+                },
+                ServiceWorkers = ServiceWorkerPolicy.Block
+            }),
+            deadline,
+            cancellationToken);
 
         // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
-        await _context.RouteAsync("**/*", async route =>
-        {
-            var request = route.Request;
-            // Creates the object needed for the next step of the workflow.
-            var resourceType = request.ResourceType;
-            var block = resourceType is "image" or "media" or "font" or "websocket" or "eventsource";
-
-            // Guards the following branch so the workflow handles this condition deliberately.
-            if (block)
+        await RunWithinRemainingAsync(
+            () => _context.RouteAsync("**/*", async route =>
             {
-                // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
-                await route.AbortAsync();
-                // Returns the computed result to the caller and completes this branch of the workflow.
-                return;
-            }
+                var request = route.Request;
+                // Creates the object needed for the next step of the workflow.
+                var resourceType = request.ResourceType;
+                var block = resourceType is "image" or "media" or "font" or "websocket" or "eventsource";
 
-            // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
-            await route.ContinueAsync();
-        });
+                // Guards the following branch so the workflow handles this condition deliberately.
+                if (block)
+                {
+                    // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
+                    await route.AbortAsync();
+                    // Returns the computed result to the caller and completes this branch of the workflow.
+                    return;
+                }
+
+                // Awaits the asynchronous operation so the workflow continues only after the dependency completes.
+                await route.ContinueAsync();
+            }),
+            deadline,
+            cancellationToken);
 
         // Returns the computed result to the caller and completes this branch of the workflow.
         return _context;
@@ -177,6 +190,18 @@ public sealed class PlaywrightPageRenderer : IPageRenderer, IAsyncDisposable
         }
 
         return await action().WaitAsync(remaining, cancellationToken);
+    }
+
+    // Executes a Playwright setup action within the current render budget.
+    private static async Task RunWithinRemainingAsync(Func<Task> action, DateTimeOffset deadline, CancellationToken cancellationToken)
+    {
+        var remaining = deadline - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw new System.TimeoutException("Sayfa render zaman bütçesi doldu.");
+        }
+
+        await action().WaitAsync(remaining, cancellationToken);
     }
 
     // Calculates the hard upper bound for one rendered document.

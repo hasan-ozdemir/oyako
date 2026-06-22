@@ -621,7 +621,7 @@ function Wait-ResourceGone([string]$Description, [scriptblock]$Exists) {
     Fail "$Description was still visible in Azure after 15 minutes."
 }
 
-function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$RequiredText = "") {
+function Wait-Smoke([string]$Name, [string]$Url, [int]$TimeoutSeconds, [string]$RequiredText = "", [int]$RequestTimeoutSeconds = 20) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     $last = ""
     do {
@@ -695,7 +695,7 @@ function Wait-TenantConfigSmoke([string]$Name, [string]$Url, [string]$ExpectedTe
     $last = ""
     do {
         try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 20
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $RequestTimeoutSeconds
             $snippet = (($response.Content -replace "\s+", " ").Trim())
             if ($snippet.Length -gt 220) { $snippet = $snippet.Substring(0, 220) }
             if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
@@ -915,7 +915,7 @@ function Build-PublishPackage([string]$PublishDir, [string]$ZipPath) {
         Fail "Linux startup script was not found: $startupScriptPath"
     }
     $startupScript = [IO.File]::ReadAllText($startupScriptPath, [System.Text.UTF8Encoding]::new($false))
-    foreach ($requiredText in @("#!/usr/bin/env bash", "set -euo pipefail", "DEBIAN_FRONTEND=noninteractive", "exec dotnet ./webapi-oyako.dll")) {
+    foreach ($requiredText in @("#!/usr/bin/env bash", "set -euo pipefail", "DEBIAN_FRONTEND=noninteractive", "--verify-playwright", "exec dotnet ./webapi-oyako.dll")) {
         if ($startupScript -notmatch [regex]::Escape($requiredText)) {
             Fail "Linux startup script is missing required text: $requiredText"
         }
@@ -1181,7 +1181,7 @@ try {
     $tenantConfigSmoke = Wait-TenantConfigSmoke "AWA /api/tenant-config" "$apiBaseUrl/tenant-config" $tenantName ([string]$tenantEnv["tenant_display_name"]) $SmokeTimeoutSeconds
     $healthSmoke = Wait-Smoke "AWA /health" "$baseUrl/health" $SmokeTimeoutSeconds '"service":"oyako"'
     $apiHealthSmoke = Wait-Smoke "AWA /api/health" "$apiBaseUrl/health" $SmokeTimeoutSeconds "`"activeAiProvider`":`"$aiProvider`""
-    $browserSmoke = Wait-Smoke "AWA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"'
+    $browserSmoke = Wait-Smoke "AWA /health/browser" "$baseUrl/health/browser" $SmokeTimeoutSeconds '"browser":"chromium"' 60
     $smokeResults = @($rootSmoke, $tenantConfigSmoke, $healthSmoke, $apiHealthSmoke, $browserSmoke)
     if ($smokeResults.Where({ -not $_.Ok }).Count -gt 0) {
         $details = ($smokeResults | ForEach-Object { "$($_.Name): HTTP $($_.StatusCode) $($_.Snippet)" }) -join [Environment]::NewLine

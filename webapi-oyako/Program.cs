@@ -19,6 +19,47 @@ if (args.Any(arg => string.Equals(arg, "--install-playwright-deps", StringCompar
     return Microsoft.Playwright.Program.Main(["install-deps", "chromium"]);
 }
 
+if (args.Any(arg => string.Equals(arg, "--verify-playwright", StringComparison.OrdinalIgnoreCase)))
+{
+    Environment.SetEnvironmentVariable("PLAYWRIGHT_DRIVER_SEARCH_PATH", AppContext.BaseDirectory);
+
+    using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
+    await using var browser = await playwright.Chromium.LaunchAsync(new Microsoft.Playwright.BrowserTypeLaunchOptions
+    {
+        Headless = true,
+        Timeout = 60000,
+        Args = new[]
+        {
+            "--disable-dev-shm-usage",
+            "--disable-background-networking",
+            "--disable-background-timer-throttling"
+        }
+    });
+
+    var page = await browser.NewPageAsync();
+    await page.SetContentAsync(
+        "<html><head><title>oyako-browser-health</title></head><body>oyako-browser-ok</body></html>",
+        new Microsoft.Playwright.PageSetContentOptions
+        {
+            WaitUntil = Microsoft.Playwright.WaitUntilState.Load,
+            Timeout = 60000
+        });
+    var text = await page.InnerTextAsync("body", new Microsoft.Playwright.PageInnerTextOptions
+    {
+        Timeout = 60000
+    });
+    await page.CloseAsync();
+
+    if (!text.Contains("oyako-browser-ok", StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine("Playwright Chromium verification rendered an unexpected payload.");
+        return 95;
+    }
+
+    Console.WriteLine("OK: Playwright Chromium verified.");
+    return 0;
+}
+
 EnvFileLoader.LoadMany(["oyako.env", "azure-cloud.env", "ollama-cloud.env"], Directory.GetCurrentDirectory());
 EnvFileLoader.LoadTenant(Directory.GetCurrentDirectory());
 var builder = WebApplication.CreateBuilder(args);
