@@ -1,0 +1,224 @@
+name: Release AWA default tenant
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      qna-probe:
+        description: "Run an optional streamed Q&A probe after passive knowledge readiness."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  release-default-tenant:
+    name: Deploy oyakdijital with deploy-awa.cmd
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Load global release config
+        id: global_config
+        run: |
+          $ErrorActionPreference = "Stop"
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+          function Read-EnvFile([string]$Path) {
+            $values = @{}
+            foreach ($rawLine in Get-Content -Encoding UTF8 -LiteralPath $Path) {
+              $line = $rawLine.Trim()
+              if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
+              $separator = $line.IndexOf("=")
+              if ($separator -le 0) { continue }
+              $key = $line.Substring(0, $separator).Trim()
+              $value = $line.Substring($separator + 1).Trim().Trim('"').Trim("'")
+              if ($key.Length -gt 0) { $values[$key] = $value }
+            }
+            return $values
+          }
+
+          function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
+            if ($Map.ContainsKey($Key) -and -not [string]::IsNullOrWhiteSpace([string]$Map[$Key])) {
+              return [string]$Map[$Key]
+            }
+            return $DefaultValue
+          }
+
+          $configPath = Join-Path $PWD "oyako.env"
+          if (-not (Test-Path -LiteralPath $configPath)) {
+            throw "Tracked global config was not found: $configPath"
+          }
+
+          $config = Read-EnvFile $configPath
+          "dotnet_version=$(EnvValue $config "ci_dotnet_version" "10.0.x")" >> $env:GITHUB_OUTPUT
+          "node_version=$(EnvValue $config "ci_node_version" "24.x")" >> $env:GITHUB_OUTPUT
+          "wait_knowledge=$(EnvValue $config "release_wait_for_startup_knowledge_ready" "true")" >> $env:GITHUB_OUTPUT
+          "knowledge_timeout=$(EnvValue $config "release_knowledge_ready_timeout_seconds" "600")" >> $env:GITHUB_OUTPUT
+          "knowledge_poll=$(EnvValue $config "release_knowledge_poll_seconds" "15")" >> $env:GITHUB_OUTPUT
+          "accept_ready_with_warnings=$(EnvValue $config "release_accept_ready_with_warnings" "true")" >> $env:GITHUB_OUTPUT
+          "qna_probe=$(EnvValue $config "release_qna_probe_enabled" "false")" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ steps.global_config.outputs.dotnet_version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ steps.global_config.outputs.node_version }}
+          cache: npm
+          cache-dependency-path: webapp-oyako/package-lock.json
+
+      - name: Materialize release environment files
+        env:
+          TENANT_OYAKDIJITAL_ENV: ${{ secrets.TENANT_OYAKDIJITAL_ENV }}
+          AZURE_CLOUD_ENV: ${{ secrets.AZURE_CLOUD_ENV }}
+          OLLAMA_CLOUD_ENV: ${{ secrets.OLLAMA_CLOUD_ENV }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          $files = @{
+            ".tenants/oyakdijital.env" = $env:TENANT_OYAKDIJITAL_ENV
+            "azure-cloud.env" = $env:AZURE_CLOUD_ENV
+            "ollama-cloud.env" = $env:OLLAMA_CLOUD_ENV
+          }
+
+          New-Item -ItemType Directory -Force -Path ".tenants" | Out-Null
+          foreach ($entry in $files.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($entry.Value)) {
+              throw "Required GitHub secret for '$($entry.Key)' is missing or empty."
+            }
+
+            $targetPath = Join-Path $PWD $entry.Key
+            $targetDirectory = Split-Path -Parent $targetPath
+            if (-not (Test-Path -LiteralPath $targetDirectory)) {
+              New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+            }
+
+            [System.IO.File]::WriteAllText($targetPath, ($entry.Value -replace "`r`n", "`n"), $utf8NoBom)
+          }
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy default tenant with deploy-awa.cmd
+        shell: cmd
+        run: deploy-awa.cmd
+
+      - name: Wait for startup knowledge readiness
+        if: ${{ steps.global_config.outputs.wait_knowledge == 'true' }}
+        env:
+          KNOWLEDGE_TIMEOUT_SECONDS: ${{ steps.global_config.outputs.knowledge_timeout }}
+          KNOWLEDGE_POLL_SECONDS: ${{ steps.global_config.outputs.knowledge_poll }}
+          ACCEPT_READY_WITH_WARNINGS: ${{ steps.global_config.outputs.accept_ready_with_warnings }}
+          GLOBAL_QNA_PROBE_ENABLED: ${{ steps.global_config.outputs.qna_probe }}
+          MANUAL_QNA_PROBE_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs['qna-probe'] || 'false' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+          function Read-EnvFile([string]$Path) {
+            $values = @{}
+            foreach ($rawLine in Get-Content -Encoding UTF8 -LiteralPath $Path) {
+              $line = $rawLine.Trim()
+              if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
+              $separator = $line.IndexOf("=")
+              if ($separator -le 0) { continue }
+              $key = $line.Substring(0, $separator).Trim()
+              $value = $line.Substring($separator + 1).Trim().Trim('"').Trim("'")
+              if ($key.Length -gt 0) { $values[$key] = $value }
+            }
+            return $values
+          }
+
+          function Require-Key([hashtable]$Map, [string]$Key, [string]$FileName) {
+            if (-not $Map.ContainsKey($Key) -or [string]::IsNullOrWhiteSpace([string]$Map[$Key])) {
+              throw "Missing required key '$Key' in $FileName."
+            }
+            return [string]$Map[$Key]
+          }
+
+          function Invoke-Json([string]$Uri, [int]$TimeoutSeconds) {
+            return Invoke-RestMethod -Uri $Uri -TimeoutSec $TimeoutSeconds
+          }
+
+          $tenantEnvPath = Join-Path $PWD ".tenants/oyakdijital.env"
+          $tenantEnv = Read-EnvFile $tenantEnvPath
+          $tenantName = Require-Key $tenantEnv "tenant_name" $tenantEnvPath
+          $tenantId = Require-Key $tenantEnv "tenant_id" $tenantEnvPath
+          $tenantSlug = Require-Key $tenantEnv "tenant_azure_domain_name" $tenantEnvPath
+          if ($tenantName -ne "oyakdijital") {
+            throw "Release tenant env must be oyakdijital, got '$tenantName'."
+          }
+
+          $timeoutSeconds = [Math]::Max(60, [int]$env:KNOWLEDGE_TIMEOUT_SECONDS)
+          $pollSeconds = [Math]::Max(5, [int]$env:KNOWLEDGE_POLL_SECONDS)
+          $acceptWarnings = $env:ACCEPT_READY_WITH_WARNINGS -eq "true"
+          $baseUrl = "https://$tenantSlug.azurewebsites.net"
+          $deadline = (Get-Date).AddSeconds($timeoutSeconds)
+          $lastStatus = ""
+
+          do {
+            try {
+              $knowledge = Invoke-Json "$baseUrl/api/knowledge-health" 20
+              $lastStatus = "status=$($knowledge.status), pages=$($knowledge.pageCount), readyQuestions=$($knowledge.readyQuestionsCount), warnings=$($knowledge.warningCount), errors=$($knowledge.errorCount), message=$($knowledge.message)"
+              $statusAccepted = $knowledge.status -eq "ready" -or ($acceptWarnings -and $knowledge.status -eq "ready_with_warnings")
+              if ($statusAccepted -and [int]$knowledge.readyQuestionsCount -gt 0) {
+                Write-Host "Knowledge readiness accepted for $tenantName ($tenantId): $lastStatus"
+                break
+              }
+            }
+            catch {
+              $lastStatus = $_.Exception.Message
+            }
+
+            Write-Host "Waiting for startup knowledge readiness: $lastStatus"
+            Start-Sleep -Seconds $pollSeconds
+          } while ((Get-Date) -lt $deadline)
+
+          if (-not $knowledge) {
+            throw "Knowledge readiness endpoint did not respond before timeout. Last status: $lastStatus"
+          }
+
+          $statusAccepted = $knowledge.status -eq "ready" -or ($acceptWarnings -and $knowledge.status -eq "ready_with_warnings")
+          if (-not $statusAccepted -or [int]$knowledge.readyQuestionsCount -le 0) {
+            throw "Knowledge readiness did not complete within $timeoutSeconds seconds. Last status: $lastStatus"
+          }
+
+          $readyQuestions = Invoke-Json "$baseUrl/api/ready-questions?count=1" 20
+          if ([int]$readyQuestions.totalAvailable -le 0 -or -not $readyQuestions.questions -or [string]::IsNullOrWhiteSpace([string]$readyQuestions.questions[0].text)) {
+            throw "Ready questions endpoint did not return an available question."
+          }
+
+          $qnaProbeEnabled = ($env:GLOBAL_QNA_PROBE_ENABLED -eq "true") -or ($env:MANUAL_QNA_PROBE_ENABLED -eq "true")
+          if (-not $qnaProbeEnabled) {
+            Write-Host "Q&A probe skipped by release_qna_probe_enabled=false."
+            exit 0
+          }
+
+          $body = @{ message = [string]$readyQuestions.questions[0].text } | ConvertTo-Json -Compress
+          $chat = Invoke-WebRequest -Uri "$baseUrl/api/chat/stream" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 180
+          if ($chat.StatusCode -lt 200 -or $chat.StatusCode -gt 299 -or $chat.Content -notmatch '"answer_content"\s*:\s*"[^"]+') {
+            throw "Q&A probe did not return a non-empty streamed answer."
+          }
+
+          Write-Host "Q&A probe completed with a non-empty streamed answer."
