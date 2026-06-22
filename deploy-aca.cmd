@@ -41,6 +41,7 @@ $Memory = "0.5Gi"
 $SmokeTimeoutSeconds = 240
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
 $script:TargetTenantName = $DefaultTenantName
+$script:LocalImageOnly = $false
 
 function Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 function Ok([string]$Message) { Write-Host "OK: $Message" -ForegroundColor Green }
@@ -276,6 +277,14 @@ function Resolve-TenantName {
     $tenantName = $DefaultTenantName
     for ($index = 0; $index -lt $ScriptArgs.Count; $index++) {
         $arg = [string]$ScriptArgs[$index]
+        if ($arg -eq "--local-image-only") {
+            $script:LocalImageOnly = $true
+            continue
+        }
+        if ($arg -eq "--help" -or $arg -eq "-h") {
+            Write-Host "Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>] [--local-image-only]"
+            exit 0
+        }
         if ($arg -eq "--tenant-name" -or $arg -eq "-t") {
             if ($index + 1 -ge $ScriptArgs.Count) { Fail "$arg requires a tenant name." }
             $tenantName = [string]$ScriptArgs[$index + 1]
@@ -286,7 +295,7 @@ function Resolve-TenantName {
             $tenantName = $arg.Substring("--tenant-name=".Length)
             continue
         }
-        Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>]"
+        Fail "Unsupported argument '$arg'. Usage: deploy-aca.cmd [--tenant-name <name>|-t <name>] [--local-image-only]"
     }
 
     if ($tenantName -notmatch "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$") {
@@ -848,18 +857,13 @@ try {
     Set-Location -LiteralPath $Root
 
     Step "Checking local prerequisites and strict env files"
-    Resolve-Exe "az" | Out-Null
+    $tenantName = Resolve-TenantName
+    $script:TargetTenantName = $tenantName
     Resolve-Exe "docker" | Out-Null
     Run -Exe "docker" -Arguments @("version") -Quiet | Out-Null
 
-    $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
-    $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
-    $tenantName = Resolve-TenantName
-    $script:TargetTenantName = $tenantName
     $tenantInfo = Load-TenantEnv $tenantName
     $tenantEnv = $tenantInfo.Values
-    Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
-    Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
     $tenantSlug = [string]$tenantEnv["tenant_azure_domain_name"]
     $ResourceGroup = "rg-$($tenantEnv["tenant_id"])-$($tenantEnv["tenant_order_number"])"
     if ($ResourceGroup -eq "rg-oyako") {
@@ -886,6 +890,26 @@ try {
     Ok "Tenant '$tenantName' loaded from $($tenantInfo.Path)."
     Ok "ACA naming: resource group '$ResourceGroup', app '$AppName', environment '$EnvironmentName'."
     Ok "ACA image naming: repository '$ImageRepository', tag '$ImageTag'."
+
+    if ($script:LocalImageOnly) {
+        Step "Building local ACA image only"
+        $env:DOCKER_BUILDKIT = "1"
+        $localImage = "$ImageRepository`:$ImageTag"
+        & docker image rm -f $localImage 2>$null | Out-Null
+        Run "docker" @("build", "--quiet", "--force-rm", "-t", $localImage, ".") | Out-Null
+        Write-Host ""
+        Write-Host "Oyako ACA local image preflight completed." -ForegroundColor Green
+        Write-Host "Tenant: $tenantName ($($tenantEnv["tenant_display_name"]))"
+        Write-Host "Image: $localImage"
+        Write-Host "Azure was not contacted and no ACR push or Container Apps deployment was performed."
+        exit 0
+    }
+
+    Resolve-Exe "az" | Out-Null
+    $azureEnv = Read-EnvFile (Join-Path $Root "azure-cloud.env")
+    $ollamaEnv = Read-EnvFile (Join-Path $Root "ollama-cloud.env")
+    Require-EnvKeys $azureEnv @("AzureAi__Endpoint", "AzureAi__DeploymentName", "AzureAi__Deployments__0", "AzureAi__ApiVersion", "AzureAi__ApiKey") "azure-cloud.env"
+    Require-EnvKeys $ollamaEnv @("ollama_api_key") "ollama-cloud.env"
 
     Step "Selecting Azure subscription"
     $account = TryAz @("account", "show", "-o", "json")
