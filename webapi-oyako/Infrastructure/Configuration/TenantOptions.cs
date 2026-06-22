@@ -9,6 +9,7 @@ public sealed class TenantOptions
     public const string SectionName = "Tenant";
     public const string DefaultTenantName = "oyakdijital";
 
+    public bool Enabled { get; set; }
     public string Id { get; set; } = string.Empty;
     public int OrderNumber { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -35,6 +36,9 @@ public sealed class TenantOptions
     public string UiWebKnowledgeSourceHeaderMessage { get; set; } = string.Empty;
     public string UiWebKnowledgeSourcesTableTitle { get; set; } = string.Empty;
     public string UiWebKnowledgeDocumentsTableTitle { get; set; } = string.Empty;
+    public List<string> TextCleanerLeadingBoilerplateTerms { get; set; } = [];
+    public List<string> TextCleanerExactBoilerplateLines { get; set; } = [];
+    public List<string> TextCleanerFooterLinePrefixes { get; set; } = [];
     public List<TenantKnowledgeSourceOptions> KnowledgeSources { get; set; } = [];
 }
 
@@ -53,15 +57,14 @@ public sealed class TenantKnowledgeSourceOptions
 // Validates the active tenant as a strict deployment contract instead of using legacy fallbacks.
 public sealed class TenantOptionsValidator : IValidateOptions<TenantOptions>
 {
-    private static readonly HashSet<string> SupportedTenants = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "oyakdijital",
-        "generictenant"
-    };
-
     public ValidateOptionsResult Validate(string? name, TenantOptions options)
     {
         var errors = new List<string>();
+        if (!options.Enabled)
+        {
+            errors.Add("Tenant must be explicitly enabled with tenant_enabled=true.");
+        }
+
         Require(options.Id, nameof(options.Id), errors);
         Require(options.Name, nameof(options.Name), errors);
         Require(options.DisplayName, nameof(options.DisplayName), errors);
@@ -81,11 +84,6 @@ public sealed class TenantOptionsValidator : IValidateOptions<TenantOptions>
         Require(options.UiWebKnowledgeSourceHeaderMessage, nameof(options.UiWebKnowledgeSourceHeaderMessage), errors);
         Require(options.UiWebKnowledgeSourcesTableTitle, nameof(options.UiWebKnowledgeSourcesTableTitle), errors);
         Require(options.UiWebKnowledgeDocumentsTableTitle, nameof(options.UiWebKnowledgeDocumentsTableTitle), errors);
-
-        if (!SupportedTenants.Contains(options.Name))
-        {
-            errors.Add($"Tenant '{options.Name}' is not supported by this cutover. Supported tenants: {string.Join(", ", SupportedTenants.OrderBy(static tenant => tenant))}.");
-        }
 
         if (options.OrderNumber < 1)
         {

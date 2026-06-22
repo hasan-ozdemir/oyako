@@ -7,12 +7,6 @@ namespace webapi_oyako.Infrastructure.Configuration;
 // Implements the EnvFileLoader component and its responsibilities in the Oyako codebase.
 public static class EnvFileLoader
 {
-    private static readonly HashSet<string> SupportedTenantNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "oyakdijital",
-        "generictenant"
-    };
-
     private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["domain_only_crawling"] = ["Crawler__DomainOnlyCrawling"],
@@ -24,6 +18,7 @@ public static class EnvFileLoader
         ["secondary_ai_provider"] = ["Ai__FallbackProviders__0"],
         ["ai_provider_ollama_cloud_model"] = ["OllamaCloud__Model", "OllamaCloud__Models__0"],
         ["ai_provider_azure_cloud_model"] = ["AzureAi__DeploymentName", "AzureAi__Deployments__0"],
+        ["tenant_enabled"] = ["Tenant__Enabled"],
         ["tenant_id"] = ["Tenant__Id"],
         ["tenant_order_number"] = ["Tenant__OrderNumber"],
         ["tenant_name"] = ["Tenant__Name"],
@@ -50,6 +45,13 @@ public static class EnvFileLoader
         ["ui_web_knowledge_source_header_message"] = ["Tenant__UiWebKnowledgeSourceHeaderMessage"],
         ["ui_web_knowledge_sources_table_title"] = ["Tenant__UiWebKnowledgeSourcesTableTitle"],
         ["ui_web_knowledge_documents_table_title"] = ["Tenant__UiWebKnowledgeDocumentsTableTitle"]
+    };
+
+    private static readonly Dictionary<string, string> ListAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["tenant_text_cleaner_leading_boilerplate_terms"] = "Tenant__TextCleanerLeadingBoilerplateTerms",
+        ["tenant_text_cleaner_exact_boilerplate_lines"] = "Tenant__TextCleanerExactBoilerplateLines",
+        ["tenant_text_cleaner_footer_line_prefixes"] = "Tenant__TextCleanerFooterLinePrefixes"
     };
 
     private static readonly Regex EnvReferencePattern = new("%([A-Za-z0-9_]+)%", RegexOptions.Compiled);
@@ -82,18 +84,13 @@ public static class EnvFileLoader
     public static void LoadTenant(string contentRootPath)
     {
         var tenantName = ResolveTenantName();
-        if (!SupportedTenantNames.Contains(tenantName))
-        {
-            throw new InvalidOperationException($"Unsupported tenant '{tenantName}'. Supported tenants: {string.Join(", ", SupportedTenantNames.OrderBy(static tenant => tenant))}.");
-        }
-
-        var tenantFileName = Path.Combine(".tenants", $"{tenantName}.env");
-        if (FindEnvFile(tenantFileName, contentRootPath) is null && HasTenantEnvironment(tenantName))
+        if (FindTenantFile(tenantName, contentRootPath) is null && HasTenantEnvironment(tenantName))
         {
             LoadAliasesFromEnvironment();
             return;
         }
 
+        var tenantFileName = DiscoverTenantFile(tenantName, contentRootPath);
         LoadRequired(tenantFileName, contentRootPath);
     }
 
@@ -154,6 +151,7 @@ public static class EnvFileLoader
 
         if (fileName.Replace('\\', '/').StartsWith(".tenants/", StringComparison.OrdinalIgnoreCase))
         {
+            ValidateTenantEnabled(parsedValues, filePath);
             ValidateTenantKnowledgeSourceIndexes(parsedValues, filePath);
         }
     }
@@ -161,6 +159,12 @@ public static class EnvFileLoader
     private static void SetEnvironmentValue(string key, string value)
     {
         Environment.SetEnvironmentVariable(key, value);
+        if (ListAliases.TryGetValue(key, out var mappedListKey))
+        {
+            SetListEnvironmentValues(mappedListKey, value);
+            return;
+        }
+
         if (!Aliases.TryGetValue(key, out var mappedKeys))
         {
             SetTenantKnowledgeSourceValue(key, value);
@@ -170,6 +174,18 @@ public static class EnvFileLoader
         foreach (var mappedKey in mappedKeys)
         {
             Environment.SetEnvironmentVariable(mappedKey, NormalizeAliasValue(mappedKey, value));
+        }
+    }
+
+    private static void SetListEnvironmentValues(string mappedListKey, string value)
+    {
+        var values = value
+            .Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToArray();
+
+        for (var index = 0; index < values.Length; index++)
+        {
+            Environment.SetEnvironmentVariable($"{mappedListKey}__{index}", values[index]);
         }
     }
 
@@ -231,6 +247,117 @@ public static class EnvFileLoader
         }
     }
 
+    private static string DiscoverTenantFile(string tenantName, string contentRootPath)
+    {
+        var files = DiscoverTenantFiles(contentRootPath);
+        if (files.Count == 0)
+        {
+            throw new FileNotFoundException("No tenant env files were found under .tenants for tenant discovery.");
+        }
+
+        var discoveredNames = new List<string>();
+        foreach (var file in files)
+        {
+            var values = ParseEnvIdentity(file);
+            var fileTenantName = Path.GetFileNameWithoutExtension(file);
+            if (!values.TryGetValue("tenant_name", out var declaredName) || string.IsNullOrWhiteSpace(declaredName))
+            {
+                throw new InvalidOperationException($"Tenant env file must declare tenant_name: {file}");
+            }
+
+            if (!string.Equals(fileTenantName, declaredName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Tenant env file name '{fileTenantName}' must match tenant_name='{declaredName}'. File: {file}");
+            }
+
+            discoveredNames.Add(declaredName);
+            if (string.Equals(declaredName, tenantName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!IsEnabled(values))
+                {
+                    throw new InvalidOperationException($"Tenant '{tenantName}' is disabled. Set tenant_enabled=true in {file} to run or deploy it.");
+                }
+
+                return Path.Combine(".tenants", Path.GetFileName(file));
+            }
+        }
+
+        throw new FileNotFoundException($"Tenant '{tenantName}' was not discovered under .tenants. Discovered tenants: {string.Join(", ", discoveredNames.OrderBy(static value => value))}");
+    }
+
+    private static string? FindTenantFile(string tenantName, string contentRootPath)
+    {
+        return DiscoverTenantFiles(contentRootPath)
+            .FirstOrDefault(file => string.Equals(Path.GetFileNameWithoutExtension(file), tenantName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<string> DiscoverTenantFiles(string contentRootPath)
+    {
+        var candidates = new[]
+        {
+            Path.Combine(contentRootPath, ".tenants"),
+            Path.Combine(contentRootPath, "..", ".tenants"),
+            Path.Combine(AppContext.BaseDirectory, ".tenants"),
+            Path.Combine(AppContext.BaseDirectory, "..", ".tenants"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", ".tenants"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".tenants"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".tenants")
+        };
+
+        return candidates
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.env", SearchOption.TopDirectoryOnly))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static file => file, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static Dictionary<string, string> ParseEnvIdentity(string filePath)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rawLine in File.ReadAllLines(filePath, Encoding.UTF8))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var separatorIndex = line.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..separatorIndex].Trim();
+            var value = line[(separatorIndex + 1)..].Trim().Trim('"');
+            values[key] = ExpandReferences(value, values);
+        }
+
+        return values;
+    }
+
+    private static void ValidateTenantEnabled(IReadOnlyDictionary<string, string> parsedValues, string filePath)
+    {
+        if (!parsedValues.TryGetValue("tenant_enabled", out var enabled))
+        {
+            throw new InvalidOperationException($"Tenant env file must declare tenant_enabled=true|false. Missing in: {filePath}");
+        }
+
+        if (!enabled.Equals("true", StringComparison.OrdinalIgnoreCase) && !enabled.Equals("false", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"tenant_enabled must be true or false. File: {filePath}");
+        }
+    }
+
+    private static bool IsEnabled(IReadOnlyDictionary<string, string> values)
+    {
+        return values.TryGetValue("tenant_enabled", out var enabled)
+            && enabled.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool HasTenantEnvironment(string tenantName)
     {
         return string.Equals(Environment.GetEnvironmentVariable("tenant_name"), tenantName, StringComparison.OrdinalIgnoreCase)
@@ -245,7 +372,7 @@ public static class EnvFileLoader
             .ToDictionary(key => key, key => Environment.GetEnvironmentVariable(key) ?? string.Empty, StringComparer.OrdinalIgnoreCase);
         foreach (var key in values.Keys.ToArray())
         {
-            if (Aliases.ContainsKey(key) || TenantKnowledgeSourcePattern.IsMatch(key))
+            if (Aliases.ContainsKey(key) || ListAliases.ContainsKey(key) || TenantKnowledgeSourcePattern.IsMatch(key))
             {
                 SetEnvironmentValue(key, ExpandReferences(values[key], values));
             }

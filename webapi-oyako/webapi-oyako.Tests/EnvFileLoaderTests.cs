@@ -82,21 +82,22 @@ public sealed class EnvFileLoaderTests
         try
         {
             File.WriteAllText(
-                Path.Combine(tenantsRoot, "oyakdijital.env"),
+                Path.Combine(tenantsRoot, "tenantdemo.env"),
                 """
+                tenant_enabled=true
                 tenant_id=013dfb350ed64e324a805eae86646ddf
                 tenant_order_number=1
-                tenant_name=oyakdijital
-                tenant_display_name=Oyak Dijital
-                tenant_azure_domain_name=oyako
-                tenant_web_url=https://www.oyakdijital.com.tr
-                tenant_admin_email=admin@oyakdijital.com.tr
-                tenant_feedback_email=iletisim@oyakdijital.com.tr
+                tenant_name=tenantdemo
+                tenant_display_name=Tenant Demo
+                tenant_azure_domain_name=tenantdemo
+                tenant_web_url=https://www.tenantdemo.example
+                tenant_admin_email=admin@tenantdemo.example
+                tenant_feedback_email=iletisim@tenantdemo.example
                 ui_web_assistant_name=Oyako
-                ui_web_brand_name=Oyak Dijital
+                ui_web_brand_name=Tenant Demo
                 ui_web_title=%ui_web_assistant_name%: %ui_web_brand_name% Soru-Cevap Platformu
                 ui_web_header_title=%ui_web_brand_name% soru-cevap platformu
-                ui_web_brand_logo_url=https://www.oyakdijital.com.tr/logo.svg
+                ui_web_brand_logo_url=https://www.tenantdemo.example/logo.svg
                 ui_web_assistant_welcome_message=Merhaba, ben %ui_web_assistant_name%.
                 ui_web_assistant_header_title=%ui_web_brand_name% hakkında sorun:
                 ui_web_knowledge_bank_header_title=Bilgi Bankası
@@ -105,32 +106,40 @@ public sealed class EnvFileLoaderTests
                 ui_web_knowledge_sources_table_title=Şu kaynaklar kullanılabilir:
                 ui_web_knowledge_documents_table_title=Şu belgeler kullanılabilir:
                 tenant_knowledge_source_1_type=web_site
-                tenant_knowledge_source_1_url=https://www.oyakdijital.com.tr
+                tenant_knowledge_source_1_url=https://www.tenantdemo.example
                 tenant_knowledge_source_1_refresh_period=1hour
+                tenant_text_cleaner_leading_boilerplate_terms=Demo Başlık|Demo Menü
+                tenant_text_cleaner_exact_boilerplate_lines=demo başlık|demo menü
+                tenant_text_cleaner_footer_line_prefixes=© demo
                 primary_ai_provider=ollama-cloud
                 secondary_ai_provider=azure-cloud
                 ai_provider_ollama_cloud_model=minimax-m3:cloud
                 ai_provider_azure_cloud_model=deepseek-v4-flash
                 """);
 
-            Environment.SetEnvironmentVariable("OYAKO_TENANT_NAME", null);
+            Environment.SetEnvironmentVariable("OYAKO_TENANT_NAME", "tenantdemo");
             EnvFileLoader.LoadTenant(tempRoot);
 
-            Assert.Equal("oyakdijital", Environment.GetEnvironmentVariable("Tenant__Name"));
-            Assert.Equal("Oyako: Oyak Dijital Soru-Cevap Platformu", Environment.GetEnvironmentVariable("Tenant__UiWebTitle"));
+            Assert.Equal("true", Environment.GetEnvironmentVariable("Tenant__Enabled"));
+            Assert.Equal("tenantdemo", Environment.GetEnvironmentVariable("Tenant__Name"));
+            Assert.Equal("Oyako: Tenant Demo Soru-Cevap Platformu", Environment.GetEnvironmentVariable("Tenant__UiWebTitle"));
             Assert.Equal("ollama-cloud", Environment.GetEnvironmentVariable("Ai__DefaultProvider"));
             Assert.Equal("azure", Environment.GetEnvironmentVariable("Ai__FallbackProviders__0"));
             Assert.Equal("minimax-m3:cloud", Environment.GetEnvironmentVariable("OllamaCloud__Models__0"));
             Assert.Equal("deepseek-v4-flash", Environment.GetEnvironmentVariable("AzureAi__Deployments__0"));
             Assert.Equal("web_site", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Type"));
-            Assert.Equal("https://www.oyakdijital.com.tr", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Url"));
+            Assert.Equal("https://www.tenantdemo.example", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Url"));
             Assert.Equal("1hour", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__RefreshPeriod"));
+            Assert.Equal("Demo Başlık", Environment.GetEnvironmentVariable("Tenant__TextCleanerLeadingBoilerplateTerms__0"));
+            Assert.Equal("demo menü", Environment.GetEnvironmentVariable("Tenant__TextCleanerExactBoilerplateLines__1"));
+            Assert.Equal("© demo", Environment.GetEnvironmentVariable("Tenant__TextCleanerFooterLinePrefixes__0"));
         }
         finally
         {
             foreach (var key in new[]
             {
                 "tenant_id",
+                "tenant_enabled",
                 "tenant_order_number",
                 "tenant_name",
                 "tenant_display_name",
@@ -157,6 +166,10 @@ public sealed class EnvFileLoaderTests
                 "secondary_ai_provider",
                 "ai_provider_ollama_cloud_model",
                 "ai_provider_azure_cloud_model",
+                "tenant_text_cleaner_leading_boilerplate_terms",
+                "tenant_text_cleaner_exact_boilerplate_lines",
+                "tenant_text_cleaner_footer_line_prefixes",
+                "Tenant__Enabled",
                 "Tenant__Name",
                 "Tenant__UiWebTitle",
                 "Ai__DefaultProvider",
@@ -167,6 +180,11 @@ public sealed class EnvFileLoaderTests
                 "Tenant__KnowledgeSources__0__Type",
                 "Tenant__KnowledgeSources__0__Url",
                 "Tenant__KnowledgeSources__0__RefreshPeriod",
+                "Tenant__TextCleanerLeadingBoilerplateTerms__0",
+                "Tenant__TextCleanerLeadingBoilerplateTerms__1",
+                "Tenant__TextCleanerExactBoilerplateLines__0",
+                "Tenant__TextCleanerExactBoilerplateLines__1",
+                "Tenant__TextCleanerFooterLinePrefixes__0",
                 "Crawler__SeedUrl",
                 "OYAKO_TENANT_NAME"
             })
