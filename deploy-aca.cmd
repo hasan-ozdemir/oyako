@@ -227,6 +227,10 @@ function Require-EnvKeys([hashtable]$Map, [string[]]$Keys, [string]$FileName) {
 }
 
 function EnvValue([hashtable]$Map, [string]$Key, [string]$DefaultValue) {
+    if ($null -eq $Map) {
+        return $DefaultValue
+    }
+
     if ($Map.ContainsKey($Key) -and -not [string]::IsNullOrWhiteSpace([string]$Map[$Key])) {
         return [string]$Map[$Key]
     }
@@ -1092,12 +1096,12 @@ try {
     $crawlerDomainOnly = Assert-BoolValue (EnvValue $tenantEnv "domain_only_crawling" "true") "domain_only_crawling"
     $crawlerMaxPages = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_count" "1000") "web_document_max_count"
     $crawlerMaxDepth = Assert-PositiveInt (EnvValue $tenantEnv "web_document_max_depth" "10") "web_document_max_depth"
-    $crawlerRequestTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_request_timeout_seconds" "20") "web_document_request_timeout_seconds"
-    $crawlerRenderTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_render_timeout_seconds" "20") "web_document_render_timeout_seconds"
-    $crawlerRenderStabilizationTimeout = Assert-PositiveInt (EnvValue $globalConfig "web_document_render_stabilization_timeout_seconds" "1") "web_document_render_stabilization_timeout_seconds"
-    $crawlerMinDelay = Assert-NonNegativeInt (EnvValue $globalConfig "web_document_minimum_request_delay_milliseconds" "0") "web_document_minimum_request_delay_milliseconds"
-    $crawlerMaxDelay = Assert-NonNegativeInt (EnvValue $globalConfig "web_document_maximum_request_delay_milliseconds" "100") "web_document_maximum_request_delay_milliseconds"
-    $crawlerStartupJitter = Assert-PositiveInt (EnvValue $globalConfig "web_document_source_refresh_startup_jitter_seconds" "1") "web_document_source_refresh_startup_jitter_seconds"
+    $crawlerRequestTimeout = Assert-PositiveInt (EnvValue $GlobalEnv "web_document_request_timeout_seconds" "20") "web_document_request_timeout_seconds"
+    $crawlerRenderTimeout = Assert-PositiveInt (EnvValue $GlobalEnv "web_document_render_timeout_seconds" "20") "web_document_render_timeout_seconds"
+    $crawlerRenderStabilizationTimeout = Assert-PositiveInt (EnvValue $GlobalEnv "web_document_render_stabilization_timeout_seconds" "1") "web_document_render_stabilization_timeout_seconds"
+    $crawlerMinDelay = Assert-NonNegativeInt (EnvValue $GlobalEnv "web_document_minimum_request_delay_milliseconds" "0") "web_document_minimum_request_delay_milliseconds"
+    $crawlerMaxDelay = Assert-NonNegativeInt (EnvValue $GlobalEnv "web_document_maximum_request_delay_milliseconds" "100") "web_document_maximum_request_delay_milliseconds"
+    $crawlerStartupJitter = Assert-PositiveInt (EnvValue $GlobalEnv "web_document_source_refresh_startup_jitter_seconds" "1") "web_document_source_refresh_startup_jitter_seconds"
     if ($crawlerMaxDelay -lt $crawlerMinDelay) {
         Fail "web_document_maximum_request_delay_milliseconds must be greater than or equal to web_document_minimum_request_delay_milliseconds."
     }
