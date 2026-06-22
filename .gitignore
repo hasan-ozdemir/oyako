@@ -4,6 +4,7 @@
 .tenants/*.env
 !.tenants/.template.env.example
 oyako.env
+!oyako.env
 azure.env
 ollama.env
 azure-cloud.env
