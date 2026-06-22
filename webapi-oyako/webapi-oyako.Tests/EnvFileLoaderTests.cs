@@ -223,6 +223,37 @@ public sealed class EnvFileLoaderTests
         }
     }
 
+    [Fact]
+    // Verifies Azure App Service app settings can provide tenant config without deploying ignored .tenants files.
+    public void LoadTenant_UsesAzureAppSettingsWhenTenantEnvFilesAreAbsent()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"oyako-tenant-env-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            Environment.SetEnvironmentVariable("OYAKO_TENANT_NAME", "tenantdemo");
+            Environment.SetEnvironmentVariable("Tenant__Enabled", "true");
+            Environment.SetEnvironmentVariable("Tenant__Name", "tenantdemo");
+            Environment.SetEnvironmentVariable("Tenant__DisplayName", "Tenant Demo");
+            Environment.SetEnvironmentVariable("Tenant__KnowledgeSources__0__Key", "source_1");
+            Environment.SetEnvironmentVariable("Tenant__KnowledgeSources__0__Type", "web_site");
+            Environment.SetEnvironmentVariable("Tenant__KnowledgeSources__0__Url", "https://www.tenantdemo.example");
+            Environment.SetEnvironmentVariable("Tenant__KnowledgeSources__0__RefreshPeriod", "1hour");
+
+            EnvFileLoader.LoadTenant(tempRoot);
+
+            Assert.Equal("tenantdemo", Environment.GetEnvironmentVariable("Tenant__Name"));
+            Assert.Equal("https://www.tenantdemo.example", Environment.GetEnvironmentVariable("Tenant__KnowledgeSources__0__Url"));
+        }
+        finally
+        {
+            ClearTenantEnvironment();
+            ClearEnvironment("Tenant__DisplayName");
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     private static string BuildTenantEnv(bool enabled)
     {
         return $$"""

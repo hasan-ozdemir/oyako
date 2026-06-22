@@ -374,7 +374,8 @@ public static class EnvFileLoader
 
     private static bool HasTenantEnvironment(string tenantName)
     {
-        return string.Equals(Environment.GetEnvironmentVariable("tenant_name"), tenantName, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(Environment.GetEnvironmentVariable("OYAKO_TENANT_NAME"), tenantName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable("tenant_name"), tenantName, StringComparison.OrdinalIgnoreCase)
             || string.Equals(Environment.GetEnvironmentVariable("Tenant__Name"), tenantName, StringComparison.OrdinalIgnoreCase);
     }
 
