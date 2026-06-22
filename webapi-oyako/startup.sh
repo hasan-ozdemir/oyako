@@ -4,9 +4,11 @@ set -euo pipefail
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Production}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://0.0.0.0:${PORT:-8080}}"
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/home/oyako-playwright/ms-playwright}"
+export DEBIAN_FRONTEND=noninteractive
 
 mkdir -p /home/oyako-data "${PLAYWRIGHT_BROWSERS_PATH}"
-PLAYWRIGHT_DEPS_MARKER="${PLAYWRIGHT_BROWSERS_PATH}/.oyako-deps-installed"
+PLAYWRIGHT_DEPS_LOG="${PLAYWRIGHT_BROWSERS_PATH}/install-deps.log"
+PLAYWRIGHT_INSTALL_LOG="${PLAYWRIGHT_BROWSERS_PATH}/install-browser.log"
 
 if [ ! -f ./webapi-oyako.dll ]; then
   echo "[startup] ERROR: webapi-oyako.dll is missing from the deployed package."
@@ -25,13 +27,18 @@ fi
 
 chmod +x ./.playwright/node/linux-x64/node
 
-if [ ! -f "${PLAYWRIGHT_DEPS_MARKER}" ] && [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] && [ ! -e /lib/x86_64-linux-gnu/libnspr4.so ]; then
-  dotnet ./webapi-oyako.dll --install-playwright-deps
-  touch "${PLAYWRIGHT_DEPS_MARKER}"
+if [ ! -e /usr/lib/x86_64-linux-gnu/libnspr4.so ] || [ ! -e /usr/lib/x86_64-linux-gnu/libnss3.so ] || [ ! -e /usr/lib/x86_64-linux-gnu/libgbm.so.1 ]; then
+  if ! dotnet ./webapi-oyako.dll --install-playwright-deps > "${PLAYWRIGHT_DEPS_LOG}" 2>&1; then
+    cat "${PLAYWRIGHT_DEPS_LOG}"
+    exit 93
+  fi
 fi
 
 if ! compgen -G "${PLAYWRIGHT_BROWSERS_PATH}/chromium-*/chrome-linux/chrome" > /dev/null; then
-  dotnet ./webapi-oyako.dll --install-playwright
+  if ! dotnet ./webapi-oyako.dll --install-playwright > "${PLAYWRIGHT_INSTALL_LOG}" 2>&1; then
+    cat "${PLAYWRIGHT_INSTALL_LOG}"
+    exit 94
+  fi
 fi
 
 exec dotnet ./webapi-oyako.dll
