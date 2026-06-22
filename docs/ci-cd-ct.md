@@ -146,7 +146,8 @@ Secrets must not be committed.
 - GitHub Actions should use GitHub repository/environment secrets.
 - Azure DevOps should use Library variable groups or Azure Key Vault integration.
 - Azure AI API keys should map to the same environment variable naming expected by backend options.
-- `.tenants/<tenant-name>.env` is for local tenant runtime configuration and is ignored by Git. It must include at least one indexed `tenant_knowledge_source_N_*` seed website source.
+- `oyako.env` is the committed, secrets-free global config file for tenant-agnostic defaults.
+- `.tenants/<tenant-name>.env` is tenant runtime configuration and is ignored by Git. It must include at least one indexed `tenant_knowledge_source_N_*` seed website source.
 - New tenant files should be created from `.tenants/.template.env.example`; do not commit tenant-specific env examples or root provider env examples.
 - `azure-cloud.env` and `ollama-cloud.env` are local-only provider secret files.
 
@@ -163,6 +164,17 @@ Local release preflight should use `deploy-awa.cmd --tenant-name <tenant> --pack
 
 ## 7. GitHub Actions Blueprint
 
+The repository includes `.github/workflows/release-awa.yml` as the default live release workflow. It triggers on `main` push and `workflow_dispatch`, reconstructs ignored env files from GitHub Secrets, logs into Azure with `AZURE_CREDENTIALS`, runs `deploy-awa.cmd` for the default tenant from `oyako.env`, and passively waits for startup knowledge readiness without re-triggering `/api/knowledge-source-refresh`.
+
+Required release secrets:
+
+- `AZURE_CREDENTIALS`
+- `TENANT_OYAKDIJITAL_ENV`
+- `AZURE_CLOUD_ENV`
+- `OLLAMA_CLOUD_ENV`
+
+The workflow uses current Node 24 based action generations: `actions/checkout@v5`, `actions/setup-dotnet@v5`, `actions/setup-node@v6`, and `azure/login@v3`.
+
 A GitHub Actions workflow should contain jobs similar to:
 
 ```yaml
@@ -175,8 +187,8 @@ jobs:
   backend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore webapi-oyako/webapi-oyako.csproj
@@ -185,10 +197,10 @@ jobs:
   frontend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24.x'
           cache: npm
           cache-dependency-path: webapp-oyako/package-lock.json
       - run: npm ci
@@ -205,7 +217,7 @@ jobs:
         working-directory: webapp-oyako
 ```
 
-A release workflow can add artifact upload, environment approvals, deployment, and post-deploy smoke tests.
+A release workflow can add artifact upload and environment approvals. Avoid duplicate crawler refresh calls when the app already performs startup seed-source refresh; prefer passive `/api/knowledge-health` readiness checks.
 
 ## 8. Azure DevOps Blueprint
 

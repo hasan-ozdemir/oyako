@@ -34,7 +34,7 @@ The scripts do not create Azure Storage Account, Static Web App, separate API Ap
 
 ## Tenant Naming and Lifecycle
 
-Tenant configuration is discovered by traversing `.tenants/*.env`. The real `.env` files are ignored by Git; the only committed tenant template is `.tenants/.template.env.example`. If a script is run without `--tenant-name` or `-t`, it uses `oyakdijital`.
+Tenant configuration is discovered by traversing `.tenants/*.env`. The real tenant `.env` files are ignored by Git; the only committed tenant template is `.tenants/.template.env.example`. If a script is run without `--tenant-name` or `-t`, it resolves the default tenant from committed, secrets-free `oyako.env` using `default_tenant_id`, then `default_tenant_name`, then the hard-coded final fallback `oyakdijital`.
 
 Required tenant keys include:
 
@@ -75,6 +75,17 @@ This satisfies the no-external-DB rule, but ACA container filesystem data is not
 
 ## Secrets and Environment Files
 
+Root `oyako.env` is committed and must remain secrets-free. It stores tenant-agnostic defaults such as:
+
+- `default_tenant_id`
+- `default_tenant_name`
+- `azure_subscription`
+- `azure_location`
+- `awa_sku`
+- `awa_runtime`
+- `awa_linux_fx_version`
+- GitHub Actions setup/runtime readiness settings
+
 Both Azure deployment scripts fail fast if required cloud env files or required keys are missing:
 
 - `azure-cloud.env`: `AzureAi__Endpoint`, `AzureAi__DeploymentName`, `AzureAi__Deployments__0`, `AzureAi__ApiVersion`, `AzureAi__ApiKey`
@@ -85,6 +96,24 @@ These files are local-only and ignored by Git. The scripts do not invent secrets
 Tenant `.env` files may contain deployment names, public branding, and local SQLite paths. They are still ignored by Git because real tenant configuration can later include private operational values.
 
 Root provider `.env.example` files are intentionally not committed. Keep required provider key names documented here and keep tenant examples centralized in `.tenants/.template.env.example`.
+
+## GitHub Actions AWA Release
+
+`.github/workflows/release-awa.yml` publishes the default tenant to Azure Web App when `main` receives a push. It uses:
+
+- `actions/checkout@v5`
+- `actions/setup-dotnet@v5`
+- `actions/setup-node@v6`
+- `azure/login@v3`
+
+Required GitHub Secrets:
+
+- `AZURE_CREDENTIALS`: service principal JSON for Azure login.
+- `TENANT_OYAKDIJITAL_ENV`: full ignored `.tenants/oyakdijital.env` content.
+- `AZURE_CLOUD_ENV`: full ignored `azure-cloud.env` content.
+- `OLLAMA_CLOUD_ENV`: full ignored `ollama-cloud.env` content.
+
+The workflow materializes these ignored files on the runner, runs `deploy-awa.cmd` without tenant arguments, and relies on `oyako.env` to resolve `oyakdijital`. After the deploy script's own smoke tests pass, the workflow passively waits for the startup crawler/refresh worker to make knowledge available by polling `/api/knowledge-health` and checking `/api/ready-questions`. It does not call `POST /api/knowledge-source-refresh`, so the release does not duplicate the startup crawl. The optional streamed Q&A probe is disabled by default and can be enabled for manual `workflow_dispatch`.
 
 ## Tenant Brand Assets
 
