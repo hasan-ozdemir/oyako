@@ -28,7 +28,9 @@ The script reads the active environment default domain at deploy time and expect
 - Linux Basic App Service Plan
 - Azure Web App
 
-The AWA script uses Azure CLI `webapp deployment source config-zip` for the ZIP upload path. `az webapp deploy`/OneDeploy returned a long-running Kudu deployment with HTTP 502 during validation, while `config-zip` completed successfully for the same package; the script is pinned to the deterministic working path instead of trying fallback deployment methods.
+The AWA script uses Azure CLI `webapp deploy --type zip --clean true` for the ZIP upload path. By default `awa_recreate_webapp=true` in `oyako.env`, so each release deletes and recreates only the script-owned Web App before deployment while keeping the script-owned App Service Plan when it is already compliant. This clears old Kudu manifests and `wwwroot` artifacts, which is required after pre-cutover Windows-style ZIP paths polluted the previous App Service deployment manifest.
+
+`awa_scm_settle_seconds` controls the wait after App Service configuration changes before ZIP deployment. `awa_deploy_timeout_milliseconds` controls the Azure CLI OneDeploy timeout.
 
 The scripts do not create Azure Storage Account, Static Web App, separate API App, Key Vault, Application Insights, Log Analytics Workspace, Redis, Cosmos DB, Azure SQL, PostgreSQL, MySQL, or another managed database resource.
 

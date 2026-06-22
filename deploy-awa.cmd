@@ -36,6 +36,8 @@ $Sku = "B1"
 $Runtime = "DOTNETCORE:10.0"
 $LinuxFxVersion = "DOTNETCORE|10.0"
 $ScmSettleSeconds = 90
+$DeployTimeoutMilliseconds = 600000
+$RecreateWebApp = $true
 $SmokeTimeoutSeconds = 360
 $Tags = @("app=oyako", "managed-by=$ManagedBy", "deployment-scope=$Scope")
 $GlobalEnv = @{}
@@ -253,6 +255,8 @@ function Apply-GlobalConfig([hashtable]$Config) {
     $script:Runtime = EnvValue $Config "awa_runtime" $script:Runtime
     $script:LinuxFxVersion = EnvValue $Config "awa_linux_fx_version" $script:LinuxFxVersion
     $script:ScmSettleSeconds = [int](Assert-PositiveInt (EnvValue $Config "awa_scm_settle_seconds" ([string]$script:ScmSettleSeconds)) "awa_scm_settle_seconds")
+    $script:DeployTimeoutMilliseconds = [int](Assert-PositiveInt (EnvValue $Config "awa_deploy_timeout_milliseconds" ([string]$script:DeployTimeoutMilliseconds)) "awa_deploy_timeout_milliseconds")
+    $script:RecreateWebApp = (Assert-BoolValue (EnvValue $Config "awa_recreate_webapp" ([string]$script:RecreateWebApp).ToLowerInvariant()) "awa_recreate_webapp") -eq "true"
 
     if ($script:Subscription -notmatch "^[A-Za-z0-9._ -]+$") { Fail "azure_subscription in oyako.env contains unsupported characters." }
     if ($script:Location -notmatch "^[a-z0-9]+$") { Fail "azure_location in oyako.env must be an Azure location name such as italynorth." }
@@ -956,9 +960,9 @@ try {
     if (@($appServiceLocations -split "\r?\n" | Where-Object { $_ } | ForEach-Object { Normalize-Location ([string]$_) }) -notcontains $Location) {
         Fail "Linux App Service $Sku is not available in '$Location'."
     }
-    $deployHelp = Run "az" @("webapp", "deployment", "source", "config-zip", "--help") -Quiet
-    if ($deployHelp -notmatch "--src" -or $deployHelp -notmatch "--timeout") {
-        Fail "Azure CLI webapp deployment source config-zip lacks required --src/--timeout arguments."
+    $deployHelp = Run "az" @("webapp", "deploy", "--help") -Quiet
+    if ($deployHelp -notmatch "--src-path" -or $deployHelp -notmatch "--type" -or $deployHelp -notmatch "--clean" -or $deployHelp -notmatch "--timeout") {
+        Fail "Azure CLI webapp deploy lacks required --src-path/--type/--clean/--timeout arguments."
     }
 
     Step "Ensuring resource group"
@@ -985,6 +989,11 @@ try {
         Remove-OwnedPlan
         $site = $null
         $plan = $null
+    }
+
+    if ($site -and $RecreateWebApp) {
+        Remove-OwnedWebApp $WebAppName "cutover"
+        $site = $null
     }
 
     if (-not $plan) {
@@ -1083,7 +1092,7 @@ try {
     Wait-ScmStable $WebAppName $ScmSettleSeconds
 
     Step "Deploying ZIP package"
-    Az @("webapp", "deployment", "source", "config-zip", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src", $ZipPath, "--timeout", "600")
+    Az @("webapp", "deploy", "--name", $WebAppName, "--resource-group", $ResourceGroup, "--src-path", $ZipPath, "--type", "zip", "--clean", "true", "--restart", "false", "--track-status", "false", "--timeout", ([string]$DeployTimeoutMilliseconds))
     Az @("webapp", "restart", "--name", $WebAppName, "--resource-group", $ResourceGroup)
 
     $baseUrl = "https://$WebAppName.azurewebsites.net"
