@@ -5,10 +5,10 @@
     <IsPackable>false</IsPackable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>2026.6.18.300</Version>
-    <AssemblyVersion>2026.6.18.300</AssemblyVersion>
-    <FileVersion>2026.6.18.300</FileVersion>
-    <InformationalVersion>v2026.6.18.300</InformationalVersion>
+    <Version>2026.6.22.343</Version>
+    <AssemblyVersion>2026.6.22.343</AssemblyVersion>
+    <FileVersion>2026.6.22.343</FileVersion>
+    <InformationalVersion>v2026.6.22.343</InformationalVersion>
     <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
 

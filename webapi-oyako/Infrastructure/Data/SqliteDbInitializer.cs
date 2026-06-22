@@ -12,9 +12,9 @@ namespace webapi_oyako.Infrastructure.Data;
 public sealed class SqliteDbInitializer
 {
     // Stores the current application version used by final-schema metadata.
-    public const string AppVersion = "v2026.6.21.400";
+    public const string AppVersion = "v2026.6.22.343";
     // Stores the schema version that represents this aggressive cutover.
-    private const string SchemaVersion = "v2026.6.21.400-tenant-seed-refresh";
+    private const string SchemaVersion = "v2026.6.22.343-clean-dev-cutover";
 
     private readonly SqliteOptions _options;
     private readonly AiOptions _aiOptions;

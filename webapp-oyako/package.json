@@ -1,8 +1,8 @@
 {
   "name": "webapp-oyako",
   "private": true,
-  "version": "2026.6.18-300",
-  "oyakoVersion": "v2026.6.18.300",
+  "version": "2026.6.22-343",
+  "oyakoVersion": "v2026.6.22.343",
   "type": "module",
   "scripts": {
     "dev": "vite",

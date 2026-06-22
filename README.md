@@ -4,7 +4,7 @@ Oyako is a Turkish full-stack question-answer platform for curated knowledge sou
 
 ## Current Release
 
-- Version: `2026.6.18.300`
+- Version: `2026.6.22.343`
 - Frontend: React, TypeScript, Vite, PWA-ready SPA
 - Backend: ASP.NET 10, Dapper, SQLite, Playwright-assisted scraping
 - AI providers: Azure AI, Ollama Cloud, Ollama Local

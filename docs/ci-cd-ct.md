@@ -335,6 +335,6 @@ Recommended rollback steps:
 
 ## 14. Public GitHub and Azure ACA Release Flow
 
-Release `2026.6.18.300` uses a public GitHub repository and minimal Azure deploy targets. The ACA release sequence is: sanitize source, initialize Git, create the detailed commit history, push to `github.com/hasan-ozdemir/oyako`, build one Docker image, push it as `<tenant_name>-<tenant_order_number>:latest`, deploy Container Apps, run public endpoint checks, and verify ACR contains only the latest image tag. The AWA sequence publishes ASP.NET with the React SPA under `wwwroot`, ZIP deploys one Web App, and runs the same public endpoint checks without Docker or ACR.
+Release `2026.6.22.343` uses a public GitHub repository and minimal Azure deploy targets. The ACA release sequence is: sanitize source, initialize Git, create the detailed commit history, push to `github.com/hasan-ozdemir/oyako`, build one Docker image, push it as `<tenant_name>-<tenant_order_number>:latest`, deploy Container Apps, run public endpoint checks, and verify ACR contains only the latest image tag. The AWA sequence publishes ASP.NET with the React SPA under `wwwroot`, ZIP deploys one Web App, and runs the same public endpoint checks without Docker or ACR.
 
 For pre-alpha simplicity, ACR image retention is intentionally aggressive. The `oyako` repository should not retain older tags after a successful deploy.

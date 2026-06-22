@@ -43,6 +43,6 @@ This document records the production readiness criteria used for the Oyako web U
 - The Playwright suite covers responsive layout, scroll safety, long answers, document editing, knowledge bank actions, settings, help, user menus, utility menus, offline status, keyboard shortcuts, Escape behavior, focus restoration, and serious-level accessibility checks.
 
 
-## Release 2026.6.18.300 UI Gate
+## Release 2026.6.22.343 UI Gate
 
 The UI remains shippable only when modal focus behavior, keyboard access, responsive scroll safety, source/document management workflows, status bar messages, and Q&A flows pass the local and deployed smoke checks. Public Azure validation must include a real Web App load and a real streamed Q&A request.

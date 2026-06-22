@@ -1,4 +1,4 @@
-# Oyako Release 2026.6.18.300
+# Oyako Release 2026.6.22.343
 
 This is the public pre-alpha baseline prepared for GitHub publication and Azure Container Apps deployment.
 

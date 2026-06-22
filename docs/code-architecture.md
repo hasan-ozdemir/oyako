@@ -229,7 +229,7 @@ To add a new AI provider, implement provider client behavior, register it in dep
 To add new knowledge source behavior, update crawler/cleaner/store/cache flow together so DB content, system instruction cache, ready questions, and UI preview remain consistent.
 
 
-## 14. Release 2026.6.18.300 Notes
+## 14. Release 2026.6.22.343 Notes
 
 This release is the public pre-alpha baseline. It treats the current schema and APIs as the primary behavior, excludes runtime state from source control, and publishes with a synthetic but evidence-driven Git history built from Codex session messages, assistant summaries, tool calls, tool outputs, code state, and documentation state.
 

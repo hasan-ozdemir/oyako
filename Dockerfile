@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish webapi-oyako/
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 LABEL com.oyako.app="oyako"
 LABEL com.oyako.role="fullstack-production"
-LABEL com.oyako.version="v2026.6.18.300"
+LABEL com.oyako.version="v2026.6.22.343"
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
